@@ -1,0 +1,27 @@
+{
+  "name": "codebaseqa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered codebase understanding and Q&A tool",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "type-check": "turbo type-check",
+    "clean": "turbo clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "keywords": ["codebase", "ai", "rag", "code-understanding", "developer-tools"],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.28.2",
+  "devDependencies": {
+    "prettier": "^3.2.0",
+    "turbo": "^2.8.1",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

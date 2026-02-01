@@ -1,0 +1,86 @@
+# ===========================================
+# CodebaseQA .gitignore
+# ===========================================
+
+# -----------------------
+# Dependencies
+# -----------------------
+node_modules/
+.pnpm-store/
+
+# -----------------------
+# Build outputs
+# -----------------------
+.next/
+dist/
+build/
+out/
+*.egg-info/
+
+# -----------------------
+# Python
+# -----------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+.egg
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# -----------------------
+# Environment
+# -----------------------
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# -----------------------
+# IDE & Editors
+# -----------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# -----------------------
+# Data & Storage
+# -----------------------
+data/
+*.db
+*.sqlite
+*.sqlite3
+chroma/
+
+# -----------------------
+# Logs
+# -----------------------
+*.log
+logs/
+
+# -----------------------
+# Turbo
+# -----------------------
+.turbo/
+
+# -----------------------
+# Testing
+# -----------------------
+coverage/
+.coverage
+htmlcov/
+
+# -----------------------
+# Misc
+# -----------------------
+*.bak
+*.tmp
+.cache/
+Documents/
+repos/
