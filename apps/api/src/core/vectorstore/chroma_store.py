@@ -184,6 +184,8 @@ class ChromaStore:
             type_boost = 0.0
             if chunk_type == "file_summary":
                 type_boost = 0.2  # File summaries are often most relevant
+            elif chunk_type == "raw_file":
+                type_boost = 0.2  # Raw files (configs, readme) are important
             elif chunk_type == "module":
                 type_boost = 0.15  # Module-level code is often entry points
             elif chunk_type in ["function", "class"]:

@@ -180,3 +180,28 @@ async def delete_repository(
     await repo_manager.cleanup_local_repo(repo.local_path)
     
     return {"status": "deleted", "repo_id": repo_id}
+
+
+@router.get("/{repo_id}/files/content")
+async def get_repo_file_content(
+    repo_id: str,
+    path: str,
+    db: Session = Depends(get_db),
+):
+    """Get content of a specific file."""
+    repo = db.query(Repository).filter(Repository.id == repo_id).first()
+    
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+        
+    repo_manager = RepoManager()
+    try:
+        content = await repo_manager.get_file_content(repo.github_owner, repo.github_name, path)
+        return {"content": content}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to read file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read file content")

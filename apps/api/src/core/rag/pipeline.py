@@ -105,7 +105,7 @@ Remember: Be DIRECT and PRECISE. Developers want quick, accurate answers."""
         
         return queries[:5]  # Max 5 queries
     
-    async def retrieve(self, query: str, limit: int = 10) -> RetrievalResult:
+    async def retrieve(self, query: str, limit: int = 6) -> RetrievalResult:
         """Enhanced retrieval with multi-query and deduplication."""
         embedding_service = self._vector_store._embedding_service
         
@@ -196,8 +196,8 @@ Example: 3,1,7,2,5"""
             logger.warning(f"Reranking failed, using original order: {e}")
             return chunks
     
-    def _build_context(self, chunks: List[RetrievedChunk]) -> str:
-        """Build structured context grouped by file."""
+    def _build_context(self, chunks: List[RetrievedChunk], max_chars: int = 15000) -> str:
+        """Build structured context grouped by file with size limits."""
         if not chunks:
             return "No relevant code found."
         
@@ -206,8 +206,9 @@ Example: 3,1,7,2,5"""
         for c in chunks:
             by_file.setdefault(c.file_path, []).append(c)
         
-        # Build hierarchical context
+        # Build hierarchical context with size tracking
         parts = []
+        total_chars = 0
         
         # Add file overview first
         parts.append("### Files Referenced:")
@@ -215,11 +216,20 @@ Example: 3,1,7,2,5"""
             parts.append(f"- `{file_path}`")
         parts.append("")
         
-        # Add code by file
+        # Add code by file, respecting size limit
         for file_path, file_chunks in by_file.items():
+            if total_chars > max_chars:
+                parts.append(f"\n*[Context truncated - {len(by_file) - len(parts)} more files...]*")
+                break
+                
             parts.append(f"### {file_path}")
             
             for c in file_chunks:
+                # Truncate individual chunks to max 1500 chars
+                content = c.content.strip()
+                if len(content) > 1500:
+                    content = content[:1500] + "\n... [truncated]"
+                
                 type_label = c.chunk_type.upper()
                 name_label = f" `{c.chunk_name}`" if c.chunk_name else ""
                 parts.append(f"**{type_label}**{name_label} (L{c.start_line}-{c.end_line}):")
@@ -227,12 +237,14 @@ Example: 3,1,7,2,5"""
                 # Determine language for syntax highlighting
                 lang = "typescript" if file_path.endswith(('.ts', '.tsx')) else \
                        "python" if file_path.endswith('.py') else \
-                       "javascript" if file_path.endswith(('.js', '.jsx')) else ""
+                       "javascript" if file_path.endswith(('.js', '.jsx')) else \
+                       "json" if file_path.endswith('.json') else \
+                       "yaml" if file_path.endswith(('.yml', '.yaml')) else \
+                       "markdown" if file_path.endswith('.md') else ""
                 
-                parts.append(f"```{lang}")
-                parts.append(c.content.strip())
-                parts.append("```")
-                parts.append("")
+                chunk_text = f"```{lang}\n{content}\n```\n"
+                total_chars += len(chunk_text)
+                parts.append(chunk_text)
         
         return "\n".join(parts)
     

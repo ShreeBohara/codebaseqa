@@ -1,2 +1,2 @@
 """API routes package."""
-from src.api.routes import repos, chat, search
+from src.api.routes import repos, chat, search, learning

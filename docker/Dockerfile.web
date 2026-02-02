@@ -1,41 +1,43 @@
-FROM node:20-alpine AS builder
+# Next.js Dockerfile
+FROM node:20-slim AS base
+
+# Install pnpm
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Copy workspace config
+COPY pnpm-workspace.yaml package.json turbo.json ./
 
-# Install pnpm and dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+# Copy package.json files
+COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
+COPY packages/shared/package.json packages/shared/
+COPY packages/ui/package.json packages/ui/
 
-# Copy source
+# Install dependencies (frozen lockfile not possible without full lockfile)
+RUN pnpm install
+
+# Copy source code
 COPY . .
 
 # Build
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build
+RUN pnpm turbo run build --filter=web...
 
 # Production image
-FROM node:20-alpine AS runner
-
+FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy built app
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
+# Copy built artifacts
+COPY --from=base /app/apps/web/.next/standalone ./
+COPY --from=base /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=base /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

@@ -36,27 +36,32 @@ codebaseqa/
 
 ### Prerequisites
 
-- Node.js 20+
-- Python 3.11+
-- pnpm
-- OpenAI API key
+- Docker Desktop (recommended)
+- OR: Node.js 20+ and Python 3.11+ for local dev
 
-### Quick Start
+### Quick Start (Docker)
 
-1. **Clone and install:**
+The easiest way to run CodebaseQA is with Docker:
+
 ```bash
+# 1. Access the project
 git clone https://github.com/your-username/codebaseqa.git
 cd codebaseqa
-pnpm install
-```
 
-2. **Set up environment:**
-```bash
+# 2. Configure environment
 cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY
+
+# 3. Start the application
+./scripts/start-docker.sh
 ```
 
-3. **Start the API:**
+- Web UI: http://localhost:3000
+- API Docs: http://localhost:8000/docs
+
+### Local Development
+
+1. **Start the API:**
 ```bash
 cd apps/api
 python -m venv venv
@@ -65,40 +70,11 @@ pip install -r requirements.txt
 uvicorn src.main:app --reload
 ```
 
-4. **Start the frontend:**
+2. **Start the Frontend:**
 ```bash
 cd apps/web
+pnpm install
 pnpm dev
-```
-
-5. **Open http://localhost:3000**
-
-### Using Docker
-
-```bash
-cd docker
-cp ../.env.example .env
-# Edit .env with your API key
-docker-compose up --build
-```
-
-## 🖥️ CLI Usage
-
-```bash
-cd cli
-pip install -e .
-
-# Index a repository
-codebaseqa index https://github.com/expressjs/express
-
-# List indexed repos
-codebaseqa list
-
-# Ask a question
-codebaseqa ask <repo_id> "What is the main entry point?"
-
-# Search code
-codebaseqa search <repo_id> "middleware"
 ```
 
 ## 📖 API Endpoints
@@ -108,11 +84,8 @@ codebaseqa search <repo_id> "middleware"
 | `/api/repos/` | POST | Index a repository |
 | `/api/repos/` | GET | List repositories |
 | `/api/repos/{id}` | GET | Get repository details |
-| `/api/repos/{id}` | DELETE | Delete repository |
 | `/api/chat/sessions` | POST | Create chat session |
-| `/api/chat/sessions/{id}/messages` | POST | Send message (SSE) |
 | `/api/search/` | POST | Semantic code search |
-| `/health` | GET | Health check |
 
 ## 🛠️ Tech Stack
 
@@ -120,23 +93,21 @@ codebaseqa search <repo_id> "middleware"
 |-----------|------------|
 | Frontend | Next.js 16, React 19, Tailwind CSS |
 | Backend | FastAPI, Python 3.11+ |
-| Code Parsing | Tree-sitter (Python, JS, TS) |
-| Embeddings | OpenAI text-embedding-3-small |
-| Vector Store | ChromaDB |
+| Parsing | Tree-sitter (Python, JS, TS, Go, etc.) |
+| Vector Store | ChromaDB (Local/Docker) |
 | LLM | OpenAI GPT-4o |
-| Database | SQLite (SQLAlchemy) |
+| Database | SQLite |
 
 ## 🔧 Configuration
 
-All configuration via environment variables:
+All configuration via environment variables (`.env`):
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key | Required |
-| `DATABASE_URL` | Database connection | `sqlite:///./data/codebaseqa.db` |
-| `VECTOR_DB_TYPE` | Vector store type | `chroma` |
-| `LLM_PROVIDER` | LLM provider | `openai` |
-| `GITHUB_TOKEN` | For private repos | Optional |
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | Required for embeddings and chat |
+| `DATABASE_URL` | SQLite path (default: `sqlite:///./data/codebaseqa.db`) |
+| `CHROMA_PERSIST_DIRECTORY` | Vector store path |
+| `GITHUB_TOKEN` | Optional, for private repos |
 
 ## 📝 License
 

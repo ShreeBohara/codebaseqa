@@ -157,6 +157,82 @@ class IndexingService:
         
         return files
     
+    async def _index_raw_file(
+        self,
+        repo: Repository,
+        file_path: Path,
+        repo_path: Path,
+        content: str
+    ) -> List[Dict[str, Any]]:
+        """Index files without parsers (JSON, MD) as raw content chunks."""
+        relative_path = str(file_path.relative_to(repo_path))
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        line_count = content.count('\n') + 1
+        
+        # Determine language
+        lang_map = {'.json': 'json', '.md': 'markdown', '.yml': 'yaml', '.yaml': 'yaml'}
+        language = lang_map.get(file_path.suffix.lower(), 'text')
+        
+        # Create CodeFile record
+        db_file = CodeFile(
+            repository_id=repo.id,
+            path=relative_path,
+            filename=file_path.name,
+            extension=file_path.suffix,
+            language=language,
+            size_bytes=len(content.encode()),
+            line_count=line_count,
+            content_hash=content_hash,
+            imports=[],
+        )
+        self._db.add(db_file)
+        self._db.commit()
+        self._db.refresh(db_file)
+        
+        chunks_data = []
+        
+        # For important files, index the whole content (truncated if needed)
+        is_important = file_path.name.lower() in IMPORTANT_FILES
+        max_content_len = 5000 if is_important else 3000
+        
+        chunk_content = content[:max_content_len]
+        if len(content) > max_content_len:
+            chunk_content += "\n... [truncated]"
+        
+        # Create single chunk for entire file
+        db_chunk = CodeChunk(
+            repository_id=repo.id,
+            file_id=db_file.id,
+            chunk_type="raw_file" if not is_important else "file_summary",
+            chunk_name=file_path.name,
+            content=chunk_content,
+            content_hash=hashlib.sha256(chunk_content.encode()).hexdigest(),
+            start_line=1,
+            end_line=min(line_count, 200),
+            docstring=f"Raw content of {file_path.name}",
+            context_before="",
+        )
+        self._db.add(db_chunk)
+        self._db.commit()
+        self._db.refresh(db_chunk)
+        
+        chunks_data.append({
+            "id": db_chunk.id,
+            "content": f"FILE: {file_path.name}\n{chunk_content}",
+            "metadata": {
+                "file_path": relative_path,
+                "chunk_type": db_chunk.chunk_type,
+                "chunk_name": file_path.name,
+                "start_line": 1,
+                "end_line": min(line_count, 200),
+                "language": language,
+                "is_important": is_important,
+            },
+        })
+        
+        logger.info(f"Indexed raw file: {file_path.name} ({len(chunk_content)} chars)")
+        return chunks_data
+    
     async def _parse_file(
         self, 
         repo: Repository, 
@@ -164,14 +240,16 @@ class IndexingService:
         repo_path: Path
     ) -> List[Dict[str, Any]]:
         """Parse a single file and return chunk data."""
-        parser = get_parser_for_file(str(file_path))
-        if not parser:
-            return []
-        
         try:
             content = file_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             return []
+        
+        parser = get_parser_for_file(str(file_path))
+        
+        # Fallback for files without parsers (JSON, MD, etc.)
+        if not parser:
+            return await self._index_raw_file(repo, file_path, repo_path, content)
         
         result = parser.parse(content, str(file_path))
         

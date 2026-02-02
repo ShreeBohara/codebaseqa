@@ -9,16 +9,26 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@xyflow/react": "^12.10.0",
+    "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "dagre": "^0.8.5",
+    "framer-motion": "^12.29.2",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^0.563.0",
+    "mermaid": "^11.12.2",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/dagre": "^0.7.53",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

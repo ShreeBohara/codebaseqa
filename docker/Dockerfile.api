@@ -1,0 +1,29 @@
+# FastAPI Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for faster pip installs
+RUN pip install uv
+
+# Copy dependency files
+COPY apps/api/pyproject.toml apps/api/requirements.txt ./
+
+# Install dependencies
+RUN uv pip install --system -r requirements.txt
+
+# Copy source code
+COPY apps/api .
+
+# Expose port
+EXPOSE 8000
+
+# Run application
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

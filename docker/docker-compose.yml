@@ -1,41 +1,31 @@
 version: '3.8'
 
 services:
-  api:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=sqlite:///./data/codebaseqa.db
-      - VECTOR_DB_TYPE=chroma
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DEBUG=false
-    volumes:
-      - api-data:/app/data
-      - repos-data:/app/data/repos
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-
   web:
     build:
-      context: ../apps/web
-      dockerfile: ../docker/Dockerfile.web
+      context: ..
+      dockerfile: docker/Dockerfile.web
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
     depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
+      - api
+    restart: always
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/codebaseqa.db
+      - CHROMA_PERSIST_DIRECTORY=./data/chroma
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: always
 
 volumes:
-  api-data:
-  repos-data:
+  data:

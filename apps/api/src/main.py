@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 import logging
 
 from src.config import settings
-from src.api.routes import repos, chat, search
+from src.api.routes import repos, chat, search, learning
 from src.models.database import init_db
 from src.dependencies import get_db_engine, get_vector_store
 
@@ -78,6 +78,7 @@ app.add_middleware(
 app.include_router(repos.router, prefix="/api/repos", tags=["repositories"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(learning.router, prefix="/api/learning", tags=["learning"])
 
 
 # Health check endpoint

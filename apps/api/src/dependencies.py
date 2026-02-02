@@ -4,9 +4,14 @@ Provides database sessions, services, and other dependencies.
 """
 
 from typing import Generator
+from fastapi import Depends
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from functools import lru_cache
+
+from src.core.llm.openai_llm import OpenAILLM
+from src.core.vectorstore.chroma_store import ChromaStore
+from src.services.learning_service import LearningService
 
 from src.config import settings
 
@@ -81,3 +86,13 @@ def get_llm_service():
         api_key=settings.openai_api_key,
         model=settings.openai_model,
     )
+
+
+def get_learning_service(
+    db: Session = Depends(get_db),
+    llm: OpenAILLM = Depends(get_llm_service),
+    vector_store: ChromaStore = Depends(get_vector_store)
+) -> LearningService:
+    """Get learning service instance."""
+    from src.services.learning_service import LearningService
+    return LearningService(db, llm, vector_store)

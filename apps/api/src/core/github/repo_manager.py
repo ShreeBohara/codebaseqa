@@ -113,3 +113,22 @@ class RepoManager:
         if local_path and os.path.exists(local_path):
             shutil.rmtree(local_path)
             logger.info(f"Cleaned up {local_path}")
+
+    async def get_file_content(self, owner: str, name: str, file_path: str) -> str:
+        """Read content of a specific file in the repository."""
+        repo_root = self.get_local_path(owner, name).resolve()
+        target_path = (repo_root / file_path).resolve()
+        
+        # Security check: Ensure target is within repo root
+        if not str(target_path).startswith(str(repo_root)):
+            raise ValueError(f"Invalid file path: {file_path}")
+            
+        if not target_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+            
+        if not target_path.is_file():
+             raise ValueError(f"Path is not a file: {file_path}")
+
+        # Read file with utf-8, ignoring errors
+        with open(target_path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()

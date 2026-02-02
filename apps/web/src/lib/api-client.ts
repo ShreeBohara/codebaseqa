@@ -20,7 +20,6 @@ export interface ChatSession {
   id: string;
   repo_id: string;
   title?: string;
-  messages: ChatMessage[];
   created_at: string;
   updated_at: string;
 }
@@ -56,7 +55,67 @@ export interface SearchResult {
   end_line: number;
 }
 
+// Learning Types
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export interface Lesson {
+  id: string;
+  title: string;
+  description: string;
+  type: 'concept' | 'code_tour' | 'quiz';
+  estimated_minutes: number;
+}
+
+export interface Module {
+  title: string;
+  description: string;
+  lessons: Lesson[];
+}
+
+export interface Syllabus {
+  repo_id: string;
+  persona: string;
+  title: string;
+  description: string;
+  modules: Module[];
+}
+
+export interface CodeReference {
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  content?: string;
+  description: string;
+}
+
+export interface LessonContent {
+  id: string;
+  title: string;
+  content_markdown: string;
+  code_references: CodeReference[];
+  diagram_mermaid?: string;
+}
+
 // API Client
+// Quiz Types
+export interface Question {
+  id: string;
+  text: string;
+  options: string[];
+  correct_option_index: number;
+  explanation: string;
+}
+
+export interface Quiz {
+  lesson_id: string;
+  questions: Question[];
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -84,6 +143,14 @@ class ApiClient {
   async getRepo(repoId: string): Promise<Repository> {
     const res = await fetch(`${this.baseUrl}/api/repos/${repoId}`);
     if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  async getRepoFileContent(repoId: string, path: string): Promise<{ content: string }> {
+    // Sanitize path: remove leading @/ or similar aliases that LLMs might hallucinate
+    const sanitizedPath = path.replace(/^@\//, 'src/').replace(/^~\//, '');
+    const res = await fetch(`${this.baseUrl}/api/repos/${repoId}/files/content?path=${encodeURIComponent(sanitizedPath)}`);
+    if (!res.ok) throw new Error('Failed to fetch file content');
     return res.json();
   }
 
@@ -162,6 +229,68 @@ class ApiClient {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
+
+  // Learning endpoints
+  async getPersonas(): Promise<Persona[]> {
+    const res = await fetch(`${this.baseUrl}/api/learning/personas`);
+    if (!res.ok) throw new Error('Failed to fetch personas');
+    return res.json();
+  }
+
+  async generateSyllabus(repoId: string, persona: string): Promise<Syllabus> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/curriculum`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona }),
+    });
+    if (!res.ok) throw new Error('Failed to generate syllabus');
+    return res.json();
+  }
+
+  async generateLesson(repoId: string, lessonId: string, title: string): Promise<LessonContent> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) throw new Error('Failed to generate lesson content');
+    return res.json();
+  }
+
+  async generateQuiz(repoId: string, lessonId: string, contextContent: string): Promise<Quiz> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/quiz`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context_content: contextContent }),
+    });
+    if (!res.ok) throw new Error('Failed to generate quiz');
+    return res.json();
+  }
+
+  async getDependencyGraph(repoId: string): Promise<DependencyGraph> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph`);
+    if (!res.ok) throw new Error('Failed to generate graph');
+    return res.json();
+  }
+}
+
+// Graph Types
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: string;
+  description: string;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface DependencyGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 }
 
 export const api = new ApiClient();
