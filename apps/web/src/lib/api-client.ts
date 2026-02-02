@@ -116,6 +116,80 @@ export interface Quiz {
   questions: Question[];
 }
 
+// Gamification Types
+export interface LevelInfo {
+  level: number;
+  title: string;
+  icon: string;
+  current_xp: number;
+  xp_for_next_level: number;
+  xp_progress: number;
+}
+
+export interface StreakInfo {
+  current: number;
+  longest: number;
+  active_today: boolean;
+}
+
+export interface UserStats {
+  total_xp: number;
+  level: LevelInfo;
+  streak: StreakInfo;
+  lessons_completed: number;
+  quizzes_passed: number;
+  challenges_completed: number;
+  perfect_quizzes: number;
+}
+
+export interface Achievement {
+  key: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  xp_reward: number;
+  requirement?: number;
+  unlocked: boolean;
+}
+
+export interface XPGain {
+  amount: number;
+  reason: string;
+  bonus?: number;
+  bonus_reason?: string;
+}
+
+export interface LessonCompleteResponse {
+  xp_gained: XPGain;
+  stats: UserStats;
+}
+
+export interface QuizResultResponse {
+  xp_gained: XPGain;
+  stats: UserStats;
+  is_pass: boolean;
+  is_perfect: boolean;
+}
+
+// Challenge Types
+export interface Challenge {
+  id: string;
+  lesson_id: string;
+  challenge_type: string;
+  data: Record<string, any>;
+  completed: boolean;
+  used_hint: boolean;
+}
+
+export interface ChallengeResult {
+  correct: boolean;
+  explanation?: string;
+  correct_answer?: string;
+  xp_earned?: number;
+  xp_gained?: XPGain;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -270,6 +344,75 @@ class ApiClient {
   async getDependencyGraph(repoId: string): Promise<DependencyGraph> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph`);
     if (!res.ok) throw new Error('Failed to generate graph');
+    return res.json();
+  }
+
+  // Gamification endpoints
+  async getUserStats(repoId: string): Promise<UserStats> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/stats`);
+    if (!res.ok) throw new Error('Failed to fetch user stats');
+    return res.json();
+  }
+
+  async getAchievements(repoId: string): Promise<Achievement[]> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/achievements`);
+    if (!res.ok) throw new Error('Failed to fetch achievements');
+    return res.json();
+  }
+
+  async completeLesson(repoId: string, lessonId: string, timeSpentSeconds: number): Promise<LessonCompleteResponse> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ time_spent_seconds: timeSpentSeconds }),
+    });
+    if (!res.ok) throw new Error('Failed to complete lesson');
+    return res.json();
+  }
+
+  async submitQuizResult(repoId: string, lessonId: string, score: number): Promise<QuizResultResponse> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/quiz/result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ score }),
+    });
+    if (!res.ok) throw new Error('Failed to submit quiz result');
+    return res.json();
+  }
+
+  async recordGraphView(repoId: string): Promise<{ achievement_unlocked?: Achievement; already_viewed?: boolean }> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph/viewed`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to record graph view');
+    return res.json();
+  }
+
+  // Challenge endpoints
+  async generateChallenge(repoId: string, lessonId: string, challengeType: string, context: string = ''): Promise<Challenge> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challenge_type: challengeType, context }),
+    });
+    if (!res.ok) throw new Error('Failed to generate challenge');
+    return res.json();
+  }
+
+  async validateChallenge(repoId: string, challengeType: string, challenge: Challenge, answer: any): Promise<ChallengeResult> {
+    const endpoint = `${this.baseUrl}/api/learning/${repoId}/challenges/validate/${challengeType}`;
+    const body = challengeType === 'bug_hunt'
+      ? { challenge, selected_line: answer }
+      : challengeType === 'code_trace'
+        ? { challenge, selected_index: answer }
+        : { challenge, answers: answer };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('Failed to validate challenge');
     return res.json();
   }
 }

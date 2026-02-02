@@ -96,3 +96,12 @@ def get_learning_service(
     """Get learning service instance."""
     from src.services.learning_service import LearningService
     return LearningService(db, llm, vector_store)
+
+
+def get_gamification_service(
+    db: Session = Depends(get_db)
+):
+    """Get gamification service instance."""
+    from src.services.gamification import GamificationService
+    return GamificationService(db)
+

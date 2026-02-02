@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { LessonContent, CodeReference, Quiz, api } from '@/lib/api-client';
-import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, BookOpen, Target, Copy, Check } from 'lucide-react';
+import { LessonContent, CodeReference, Quiz, Challenge, api } from '@/lib/api-client';
+import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, BookOpen, Target, Copy, Check, Bug, Eye, Edit3 } from 'lucide-react';
 import { QuizView } from './quiz-view';
 import { MermaidDiagram } from './MermaidDiagram';
+import { ChallengeView } from './ChallengeView';
 
 interface LessonViewProps {
     repoId: string;
@@ -24,6 +25,11 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
     const [showQuiz, setShowQuiz] = useState(false);
     const [quiz, setQuiz] = useState<Quiz | null>(null);
     const [generatingQuiz, setGeneratingQuiz] = useState(false);
+
+    // Challenge State
+    const [showChallenge, setShowChallenge] = useState(false);
+    const [challenge, setChallenge] = useState<Challenge | null>(null);
+    const [generatingChallenge, setGeneratingChallenge] = useState(false);
 
     useEffect(() => {
         async function loadContent() {
@@ -65,6 +71,26 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
         }
     };
 
+    const handleStartChallenge = async (type: 'bug_hunt' | 'code_trace' | 'fill_blank') => {
+        setGeneratingChallenge(true);
+        try {
+            const data = await api.generateChallenge(repoId, content.id, type, content.content_markdown);
+            setChallenge(data);
+            setShowChallenge(true);
+        } catch (error) {
+            console.error("Failed to generate challenge:", error);
+            alert("Could not generate challenge. Please try again.");
+        } finally {
+            setGeneratingChallenge(false);
+        }
+    };
+
+    const handleChallengeComplete = (correct: boolean, usedHint: boolean) => {
+        setShowChallenge(false);
+        // XP is awarded by backend during validation, but we could show a toast here
+        console.log(`Challenge completed: correct=${correct}, usedHint=${usedHint}`);
+    };
+
     return (
         <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col pt-16 animate-in fade-in duration-300">
 
@@ -84,6 +110,17 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
                         </div>
                         <QuizView quiz={quiz} onClose={() => setShowQuiz(false)} />
                     </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Challenge Overlay */}
+            <AnimatePresence>
+                {showChallenge && challenge && (
+                    <ChallengeView
+                        challenge={challenge}
+                        onComplete={handleChallengeComplete}
+                        onClose={() => setShowChallenge(false)}
+                    />
                 )}
             </AnimatePresence>
 
@@ -108,6 +145,38 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Challenge Buttons */}
+                    <div className="flex items-center gap-1 mr-2">
+                        <button
+                            onClick={() => handleStartChallenge('bug_hunt')}
+                            disabled={generatingChallenge}
+                            className="bg-red-600/10 hover:bg-red-600/20 text-red-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                            title="Bug Hunt Challenge"
+                        >
+                            <Bug size={14} />
+                            <span className="hidden sm:inline">Bug Hunt</span>
+                        </button>
+                        <button
+                            onClick={() => handleStartChallenge('code_trace')}
+                            disabled={generatingChallenge}
+                            className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                            title="Code Trace Challenge"
+                        >
+                            <Eye size={14} />
+                            <span className="hidden sm:inline">Trace</span>
+                        </button>
+                        <button
+                            onClick={() => handleStartChallenge('fill_blank')}
+                            disabled={generatingChallenge}
+                            className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                            title="Fill in the Blank Challenge"
+                        >
+                            <Edit3 size={14} />
+                            <span className="hidden sm:inline">Fill</span>
+                        </button>
+                    </div>
+
+                    {/* Quiz Button */}
                     <button
                         onClick={handleTakeQuiz}
                         disabled={generatingQuiz}

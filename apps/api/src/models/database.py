@@ -207,6 +207,103 @@ class LearningPath(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class LearningSyllabus(Base):
+    """Cached syllabus to avoid regeneration."""
+    __tablename__ = "learning_syllabi"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False)
+    
+    persona = Column(String(50), nullable=False)
+    syllabus_json = Column(JSON, nullable=False)  # Full syllabus data
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # Regenerate after expiry
+    
+    __table_args__ = (
+        Index("ix_learning_syllabi_repo_persona", "repository_id", "persona"),
+    )
+
+
+class LessonProgress(Base):
+    """Track lesson completion per repository."""
+    __tablename__ = "lesson_progress"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False)
+    
+    lesson_id = Column(String(100), nullable=False)
+    module_id = Column(String(100), nullable=True)
+    persona = Column(String(50), nullable=True)
+    
+    status = Column(String(20), default="not_started")  # not_started, in_progress, completed
+    
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    time_spent_seconds = Column(Integer, default=0)
+    
+    # Quiz performance
+    quiz_score = Column(Float, nullable=True)  # 0.0 - 1.0
+    quiz_attempts = Column(Integer, default=0)
+    
+    # Challenge performance  
+    challenges_completed = Column(Integer, default=0)
+    challenges_perfect = Column(Integer, default=0)  # No hints used
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        Index("ix_lesson_progress_repo", "repository_id"),
+        Index("ix_lesson_progress_lesson", "repository_id", "lesson_id"),
+    )
+
+
+class UserXP(Base):
+    """XP and level tracking per repository."""
+    __tablename__ = "user_xp"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False, unique=True)
+    
+    total_xp = Column(Integer, default=0)
+    level = Column(Integer, default=1)
+    
+    # Streak tracking
+    streak_days = Column(Integer, default=0)
+    longest_streak = Column(Integer, default=0)
+    last_activity_date = Column(DateTime, nullable=True)
+    
+    # Statistics
+    lessons_completed = Column(Integer, default=0)
+    quizzes_passed = Column(Integer, default=0)
+    challenges_completed = Column(Integer, default=0)
+    perfect_quizzes = Column(Integer, default=0)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Achievement(Base):
+    """Unlocked achievements per repository."""
+    __tablename__ = "achievements"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False)
+    
+    achievement_key = Column(String(50), nullable=False)  # e.g., "first_lesson", "streak_7"
+    category = Column(String(30), nullable=True)  # learning, streak, explorer, challenge
+    
+    unlocked_at = Column(DateTime, default=datetime.utcnow)
+    xp_awarded = Column(Integer, default=0)
+    
+    __table_args__ = (
+        Index("ix_achievements_repo", "repository_id"),
+        Index("ix_achievements_key", "repository_id", "achievement_key", unique=True),
+    )
+
+
 def init_db(engine):
     """Create all tables."""
     Base.metadata.create_all(bind=engine)
+
