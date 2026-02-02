@@ -1,0 +1,73 @@
+name: CodebaseQA CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./apps/api
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pytest pytest-asyncio httpx pytest-mock pytest-cov ruff
+        
+    - name: Lint with Ruff
+      run: |
+        ruff check src tests
+        
+    - name: Run Tests
+      run: |
+        pytest tests/unit tests/integration --cov=src --cov-report=xml
+        
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+  frontend-check:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./apps/web
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        
+    - name: Install dependencies
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9
+        run_install: |
+          - recursive: true
+            args: [--no-frozen-lockfile]
+            
+    - name: Lint
+      run: pnpm lint
+      
+    - name: Type Check
+      run: pnpm tsc --noEmit

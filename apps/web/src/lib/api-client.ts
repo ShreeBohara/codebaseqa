@@ -101,6 +101,16 @@ export interface LessonContent {
   diagram_mermaid?: string;
 }
 
+export interface CodeTour {
+  title: string;
+  steps: Array<{
+    file: string;
+    line: number;
+    description: string;
+    title?: string;
+  }>;
+}
+
 // API Client
 // Quiz Types
 export interface Question {
@@ -413,6 +423,18 @@ class ApiClient {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error('Failed to validate challenge');
+    return res.json();
+  }
+
+  async exportCodeTour(repoId: string, lessonId: string): Promise<CodeTour> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/export/codetour`);
+    if (!res.ok) throw new Error('Failed to export CodeTour');
+    return res.json();
+  }
+
+  async getUserActivity(repoId: string): Promise<Record<string, number>> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/activity`);
+    if (!res.ok) throw new Error('Failed to load activity');
     return res.json();
   }
 }

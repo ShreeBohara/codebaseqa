@@ -25,6 +25,14 @@ def get_client() -> httpx.Client:
     return httpx.Client(base_url=API_URL, timeout=300.0)
 
 
+def handle_api_error(e: Exception):
+    """Handle API errors gracefully."""
+    console.print(f"\n[red]Error:[/] {e}")
+    if isinstance(e, httpx.ConnectError):
+        console.print("[dim]Is the API server running? Start it with 'uvicorn src.main:app' in apps/api[/]")
+    raise click.Abort()
+
+
 @click.group()
 @click.version_option(version="0.1.0")
 def cli():
@@ -102,9 +110,8 @@ def index(github_url: str, branch: str, wait: bool):
             console.print(f"   Chunks: {status_data['total_chunks']}")
             console.print(f"\n[dim]Use 'codebaseqa ask {repo['id']} \"your question\"' to start asking questions.[/]")
             
-        except httpx.HTTPError as e:
-            console.print(f"\n[red]Error:[/] {e}")
-            raise click.Abort()
+        except Exception as e:
+            handle_api_error(e)
 
 
 @cli.command()
@@ -164,9 +171,8 @@ def ask(repo_id: str, question: str):
                         console.print(f"  {i}. [cyan]{source['file']}[/] L{source['start_line']}-{source['end_line']}")
                     console.print()
                     
-        except httpx.HTTPError as e:
-            console.print(f"\n[red]Error:[/] {e}")
-            raise click.Abort()
+        except Exception as e:
+            handle_api_error(e)
 
 
 @cli.command(name="list")
@@ -212,10 +218,8 @@ def list_repos():
             console.print(table)
             console.print()
             
-        except httpx.HTTPError as e:
-            console.print(f"\n[red]Error:[/] {e}")
-            console.print("[dim]Is the API server running? Start it with 'uvicorn src.main:app' in apps/api[/]")
-            raise click.Abort()
+        except Exception as e:
+            handle_api_error(e)
 
 
 @cli.command()
@@ -252,9 +256,70 @@ def search(repo_id: str, query: str, limit: int):
                 console.print(Panel(snippet, border_style="dim"))
                 console.print()
                 
-        except httpx.HTTPError as e:
-            console.print(f"\n[red]Error:[/] {e}")
-            raise click.Abort()
+        except Exception as e:
+            handle_api_error(e)
+
+
+@cli.command()
+@click.argument("repo_id")
+def lessons(repo_id: str):
+    """List available learning lessons."""
+    with get_client() as client:
+        try:
+            # We need to fetch the syllabus. Since there is no list-syllabus endpoint,
+            # we try to fetch the default persona or list personas first?
+            # Actually, `generate_curriculum` creates/fetches one. But that triggers generation.
+            # We need a way to list EXISTING syllabi or generate one if missing?
+            # For CLI, let's assume we want to see the default track.
+            
+            # First, check if repo exists
+            repo_res = client.get(f"/api/repos/{repo_id}")
+            repo_res.raise_for_status()
+            
+            # Fetch default syllabus (implicitly generates if missing, might take time)
+            console.print("[dim]Fetching curriculum (this may take a moment)...[/]")
+            response = client.post(f"/api/learning/{repo_id}/curriculum", json={"persona": "new_hire"})
+            response.raise_for_status()
+            syllabus = response.json()
+            
+            console.print(f"\n[bold]🎓 Curriculum:[/] {syllabus['title']}\n")
+            
+            for m_idx, module in enumerate(syllabus["modules"], 1):
+                console.print(f"[bold blue]{m_idx}. {module['title']}[/]")
+                for lesson in module["lessons"]:
+                    console.print(f"   • {lesson['title']} [dim](ID: {lesson['id']})[/]")
+                console.print()
+                
+        except Exception as e:
+            handle_api_error(e)
+
+
+@cli.command(name="export-tour")
+@click.argument("repo_id")
+@click.argument("lesson_id")
+@click.option("--output", "-o", default=None, help="Output filename")
+def export_tour(repo_id: str, lesson_id: str, output: str):
+    """Export a lesson as a VS Code CodeTour file."""
+    with get_client() as client:
+        try:
+            console.print(f"[dim]Exporting lesson {lesson_id}...[/]")
+            response = client.get(f"/api/learning/{repo_id}/lessons/{lesson_id}/export/codetour")
+            response.raise_for_status()
+            tour = response.json()
+            
+            if not output:
+                # Sanitize title for filename
+                slug = tour["title"].lower().replace(" ", "_")
+                output = f"{slug}.tour"
+            
+            import json
+            with open(output, "w") as f:
+                json.dump(tour, f, indent=2)
+                
+            console.print(f"[green]✓ Exported to:[/] {output}")
+            
+        except Exception as e:
+            handle_api_error(e)
 
 
 if __name__ == "__main__":

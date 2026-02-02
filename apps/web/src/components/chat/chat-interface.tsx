@@ -110,7 +110,7 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="flex flex-col items-center justify-center min-h-[60vh] relative"
+                                className="flex flex-col items-center justify-center min-h-[60vh] relative pb-32"
                             >
                                 {/* Background Gradient Blob */}
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] -z-10" />
@@ -153,6 +153,8 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                                         </motion.button>
                                     ))}
                                 </div>
+                                {/* Spacer to ensure prompts aren't hidden by the floating input on smaller screens */}
+                                <div className="h-20 md:hidden" aria-hidden="true" />
                             </motion.div>
                         ) : (
                             // Messages

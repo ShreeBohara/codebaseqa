@@ -2,18 +2,20 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { LessonContent, CodeReference, Quiz, Challenge, api } from '@/lib/api-client';
-import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, BookOpen, Target, Copy, Check, Bug, Eye, Edit3 } from 'lucide-react';
+import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, BookOpen, Target, Copy, Check, Bug, Eye, Edit3, Download } from 'lucide-react';
 import { QuizView } from './quiz-view';
 import { MermaidDiagram } from './MermaidDiagram';
 import { ChallengeView } from './ChallengeView';
+import confetti from 'canvas-confetti';
 
 interface LessonViewProps {
     repoId: string;
     content: LessonContent;
     onClose: () => void;
+    onComplete?: (xpGain: any) => void;
 }
 
-export function LessonView({ repoId, content, onClose }: LessonViewProps) {
+export function LessonView({ repoId, content, onClose, onComplete }: LessonViewProps) {
     const [activeRef, setActiveRef] = useState<CodeReference | null>(
         content.code_references.length > 0 ? content.code_references[0] : null
     );
@@ -30,6 +32,7 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
     const [showChallenge, setShowChallenge] = useState(false);
     const [challenge, setChallenge] = useState<Challenge | null>(null);
     const [generatingChallenge, setGeneratingChallenge] = useState(false);
+    const [downloading, setDownloading] = useState(false);
 
     useEffect(() => {
         async function loadContent() {
@@ -91,6 +94,47 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
         console.log(`Challenge completed: correct=${correct}, usedHint=${usedHint}`);
     };
 
+    const handleExportCodeTour = async () => {
+        setDownloading(true);
+        try {
+            const tour = await api.exportCodeTour(repoId, content.id);
+            // Create blob and download
+            const blob = new Blob([JSON.stringify(tour, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${content.title.replace(/\\s+/g, '_').toLowerCase()}.tour`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Failed to export CodeTour:", error);
+            alert("Could not export CodeTour. Please try again.");
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const handleFinishLesson = async () => {
+        try {
+            const result = await api.completeLesson(repoId, content.id, 300); // Mock time spent
+
+            // Trigger Confetti
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+
+            onComplete?.(result.xp_gained);
+            if (onClose) onClose();
+
+        } catch (error) {
+            console.error("Failed to complete lesson:", error);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col pt-16 animate-in fade-in duration-300">
 
@@ -142,6 +186,15 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
                             </span>
                         </div>
                     </div>
+
+                    <button
+                        onClick={handleExportCodeTour}
+                        disabled={downloading}
+                        className="p-2 ml-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-indigo-400 transition-colors"
+                        title="Export as VS Code Tour"
+                    >
+                        {downloading ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
+                    </button>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -257,6 +310,17 @@ export function LessonView({ repoId, content, onClose }: LessonViewProps) {
                                     {content.content_markdown}
                                 </ReactMarkdown>
                             </div>
+                        </div>
+
+                        {/* Finish Button */}
+                        <div className="mt-12 flex justify-center">
+                            <button
+                                onClick={handleFinishLesson}
+                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/20 flex items-center gap-2 transform transition-all hover:scale-105"
+                            >
+                                <Check size={20} />
+                                Finish Lesson
+                            </button>
                         </div>
                     </div>
                 )}

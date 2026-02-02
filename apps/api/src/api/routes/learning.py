@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from src.services.learning_service import LearningService
 from src.services.gamification import GamificationService, UserStats, XPGain, AchievementDef
 from src.models.learning import Syllabus, Persona, LessonContent
+from src.models.codetour_schemas import CodeTour
 from src.dependencies import get_learning_service, get_gamification_service
 
 router = APIRouter(tags=["learning"])
@@ -71,6 +72,21 @@ async def generate_quiz(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/{repo_id}/lessons/{lesson_id}/export/codetour", response_model=CodeTour)
+async def export_codetour(
+    repo_id: str,
+    lesson_id: str,
+    service: LearningService = Depends(get_learning_service)
+):
+    """Export a lesson as a VS Code CodeTour file (.tour)."""
+    try:
+        tour = await service.export_lesson_to_codetour(repo_id, lesson_id)
+        if not tour:
+            raise HTTPException(status_code=404, detail="Lesson not found or could not be generated")
+        return tour
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{repo_id}/graph")
 async def generate_graph(
     repo_id: str,
@@ -98,6 +114,18 @@ async def get_user_stats(
     """Get user XP, level, streak, and statistics."""
     try:
         return service.get_user_stats(repo_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{repo_id}/activity")
+async def get_user_activity(
+    repo_id: str,
+    service: GamificationService = Depends(get_gamification_service)
+):
+    """Get user activity history for heatmap."""
+    try:
+        return service.get_activity_history(repo_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -248,6 +276,7 @@ async def generate_challenge(
 class ValidateBugHuntRequest(BaseModel):
     challenge: Dict
     selected_line: int
+    used_hint: bool = False
 
 
 @router.post("/{repo_id}/challenges/validate/bug_hunt")
@@ -267,7 +296,7 @@ async def validate_bug_hunt(
         
         # Award XP if correct
         if result["correct"]:
-            xp_gain = gamification.record_challenge_complete(repo_id, False)
+            xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
         
         return result
@@ -278,6 +307,7 @@ async def validate_bug_hunt(
 class ValidateCodeTraceRequest(BaseModel):
     challenge: Dict
     selected_index: int
+    used_hint: bool = False
 
 
 @router.post("/{repo_id}/challenges/validate/code_trace")
@@ -297,7 +327,7 @@ async def validate_code_trace(
         
         # Award XP if correct
         if result["correct"]:
-            xp_gain = gamification.record_challenge_complete(repo_id, False)
+            xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
         
         return result
@@ -308,6 +338,7 @@ async def validate_code_trace(
 class ValidateFillBlankRequest(BaseModel):
     challenge: Dict
     answers: List[str]
+    used_hint: bool = False
 
 
 @router.post("/{repo_id}/challenges/validate/fill_blank")
@@ -327,7 +358,7 @@ async def validate_fill_blank(
         
         # Award XP if correct
         if result["correct"]:
-            xp_gain = gamification.record_challenge_complete(repo_id, False)
+            xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
         
         return result

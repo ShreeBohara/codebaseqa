@@ -1,0 +1,321 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.8, pytest-9.0.2, pluggy-1.6.0 -- /Users/shree/Desktop/codebaseqa/apps/api/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/shree/Desktop/codebaseqa/apps/api
+configfile: pyproject.toml
+plugins: anyio-4.12.1, mock-3.15.1, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/integration/test_api.py::test_list_repos_empty PASSED              [ 50%]
+tests/integration/test_api.py::test_create_repo FAILED                   [100%]
+
+=================================== FAILURES ===================================
+_______________________________ test_create_repo _______________________________
+
+client = <starlette.testclient.TestClient object at 0x10cac27b0>
+
+    def test_create_repo(client):
+        """Test creating a new repository."""
+        repo_data = {
+            "github_url": "https://github.com/fastapi/fastapi"
+        }
+    
+        with patch("src.api.routes.repos.get_db") as mock_get_db, \
+             patch("src.api.routes.repos.IndexingService") as MockIndexingService:
+    
+            # Mock DB
+            mock_db = MagicMock()
+            mock_repo = MagicMock()
+            mock_repo.id = "new-repo-id"
+            mock_repo.github_url = repo_data["github_url"]
+            mock_repo.github_owner = "fastapi"
+            mock_repo.github_name = "fastapi"
+            mock_repo.github_name = "fastapi"
+            mock_repo.status = "pending"
+            import datetime
+            mock_repo.created_at = datetime.datetime.now()
+            mock_repo.last_indexed_at = None
+            mock_repo.languages = []
+            mock_repo.total_files = 0
+            mock_repo.total_chunks = 0
+            mock_repo.description = "Test Repo"
+            mock_repo.primary_language = "Python"
+    
+            # Setup DB mocks to simulate successful creation
+            mock_db.query.return_value.filter.return_value.first.return_value = None  # No existing repo
+            mock_db.add.return_value = None
+            mock_db.commit.return_value = None
+            def refresh_side_effect(x):
+                setattr(x, 'id', 'new-repo-id')
+                setattr(x, 'created_at', datetime.datetime.now())
+                setattr(x, 'total_files', 0)
+                setattr(x, 'total_chunks', 0)
+                if not hasattr(x, 'languages'): setattr(x, 'languages', [])
+    
+            mock_db.refresh.side_effect = refresh_side_effect
+    
+            # Mock Indexing Service
+            mock_service = MockIndexingService.return_value
+            mock_service.index_repository = MagicMock()
+    
+            # Override dependency
+            from src.dependencies import get_db
+            app_client = client
+            app_client.app.dependency_overrides[get_db] = lambda: mock_db
+    
+>           response = app_client.post("/api/repos", json=repo_data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_api.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/starlette/testclient.py:546: in post
+    return super().post(
+venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+venv/lib/python3.12/site-packages/starlette/testclient.py:445: in request
+    return super().request(
+venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/starlette/testclient.py:348: in handle_request
+    raise exc
+venv/lib/python3.12/site-packages/starlette/testclient.py:345: in handle_request
+    portal.call(self.app, scope, receive, send)
+venv/lib/python3.12/site-packages/anyio/from_thread.py:334: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.pyenv/versions/3.12.8/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+../../../../.pyenv/versions/3.12.8/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+venv/lib/python3.12/site-packages/anyio/from_thread.py:259: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/fastapi/applications.py:1135: in __call__
+    await super().__call__(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+venv/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/routing.py:736: in app
+    await route.handle(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/routing.py:290: in handle
+    await self.app(scope, receive, send)
+venv/lib/python3.12/site-packages/fastapi/routing.py:115: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+venv/lib/python3.12/site-packages/fastapi/routing.py:101: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/fastapi/routing.py:377: in app
+    content = await serialize_response(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def serialize_response(
+        *,
+        field: Optional[ModelField] = None,
+        response_content: Any,
+        include: Optional[IncEx] = None,
+        exclude: Optional[IncEx] = None,
+        by_alias: bool = True,
+        exclude_unset: bool = False,
+        exclude_defaults: bool = False,
+        exclude_none: bool = False,
+        is_coroutine: bool = True,
+        endpoint_ctx: Optional[EndpointContext] = None,
+    ) -> Any:
+        if field:
+            errors = []
+            if is_coroutine:
+                value, errors_ = field.validate(response_content, {}, loc=("response",))
+            else:
+                value, errors_ = await run_in_threadpool(
+                    field.validate, response_content, {}, loc=("response",)
+                )
+            if isinstance(errors_, list):
+                errors.extend(errors_)
+            if errors:
+                ctx = endpoint_ctx or EndpointContext()
+>               raise ResponseValidationError(
+                    errors=errors,
+                    body=response_content,
+                    endpoint_ctx=ctx,
+                )
+E               fastapi.exceptions.ResponseValidationError: 1 validation error:
+E                 {'type': 'list_type', 'loc': ('response', 'languages'), 'msg': 'Input should be a valid list', 'input': None}
+E               
+E                 File "/Users/shree/Desktop/codebaseqa/apps/api/src/api/routes/repos.py", line 45, in create_repository
+E                   POST /api/repos/
+
+venv/lib/python3.12/site-packages/fastapi/routing.py:215: ResponseValidationError
+----------------------------- Captured stderr call -----------------------------
+2026-02-02 13:52:57,218 - httpx - INFO - HTTP Request: POST http://testserver/api/repos "HTTP/1.1 307 Temporary Redirect"
+2026-02-02 13:52:57,241 - src.main - ERROR - Unhandled exception: 1 validation error:
+  {'type': 'list_type', 'loc': ('response', 'languages'), 'msg': 'Input should be a valid list', 'input': None}
+
+  File "/Users/shree/Desktop/codebaseqa/apps/api/src/api/routes/repos.py", line 45, in create_repository
+    POST /api/repos/
+Traceback (most recent call last):
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'list_type', 'loc': ('response', 'languages'), 'msg': 'Input should be a valid list', 'input': None}
+
+  File "/Users/shree/Desktop/codebaseqa/apps/api/src/api/routes/repos.py", line 45, in create_repository
+    POST /api/repos/
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/api/repos "HTTP/1.1 307 Temporary Redirect"
+ERROR    src.main:main.py:120 Unhandled exception: 1 validation error:
+  {'type': 'list_type', 'loc': ('response', 'languages'), 'msg': 'Input should be a valid list', 'input': None}
+
+  File "/Users/shree/Desktop/codebaseqa/apps/api/src/api/routes/repos.py", line 45, in create_repository
+    POST /api/repos/
+Traceback (most recent call last):
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shree/Desktop/codebaseqa/apps/api/venv/lib/python3.12/site-packages/fastapi/routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'list_type', 'loc': ('response', 'languages'), 'msg': 'Input should be a valid list', 'input': None}
+
+  File "/Users/shree/Desktop/codebaseqa/apps/api/src/api/routes/repos.py", line 45, in create_repository
+    POST /api/repos/
+=============================== warnings summary ===============================
+src/config.py:12
+  /Users/shree/Desktop/codebaseqa/apps/api/src/config.py:12: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Settings(BaseSettings):
+
+src/models/schemas.py:41
+  /Users/shree/Desktop/codebaseqa/apps/api/src/models/schemas.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class RepoResponse(BaseModel):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform darwin, python 3.12.8-final-0 _______________
+
+Name                                       Stmts   Miss  Cover   Missing
+------------------------------------------------------------------------
+src/__init__.py                                0      0   100%
+src/api/__init__.py                            0      0   100%
+src/api/routes/__init__.py                     1      0   100%
+src/api/routes/chat.py                        58     43    26%   24-34, 50-66, 85-153
+src/api/routes/learning.py                   170    107    37%   20, 29-32, 45-52, 65-72, 80-86, 99-102, 111-114, 129-137, 152-166, 180-189, 198-207, 228-245, 260-275, 290-305, 320-335
+src/api/routes/repos.py                      100     60    40%   24-42, 66-74, 117-122, 131-149, 166-182, 192-207
+src/api/routes/search.py                      35     26    26%   23-75
+src/config.py                                 43      0   100%
+src/core/__init__.py                           0      0   100%
+src/core/embeddings/__init__.py                1      1     0%   2
+src/core/embeddings/openai_embeddings.py      35     35     0%   6-55
+src/core/github/__init__.py                    1      0   100%
+src/core/github/repo_manager.py               64     42    34%   29, 36, 46-94, 98-109, 113-115, 119-134
+src/core/llm/__init__.py                       1      0   100%
+src/core/llm/openai_llm.py                    34     24    29%   17-19, 23-31, 35-43, 50-63
+src/core/parser/__init__.py                    1      0   100%
+src/core/parser/tree_sitter_parser.py        106     63    41%   74-79, 83-117, 128-132, 144-180, 184-192, 195-198, 201, 208, 213-217
+src/core/rag/__init__.py                       1      0   100%
+src/core/rag/pipeline.py                     127     97    24%   81-83, 87-106, 110-153, 157-197, 201-249, 258-266, 275-284
+src/core/vectorstore/__init__.py               1      0   100%
+src/core/vectorstore/chroma_store.py         101     80    21%   27-30, 34, 42, 46-47, 54-61, 72-86, 104-132, 144-215
+src/dependencies.py                           43     22    49%   23-27, 36-37, 45-50, 57-61, 71-73, 83-85, 97-98, 105-106
+src/main.py                                   59     33    44%   30-55, 88-110, 128-129
+src/models/__init__.py                         0      0   100%
+src/models/database.py                       159      1    99%   308
+src/models/learning.py                        67      0   100%
+src/models/schemas.py                        114      0   100%
+src/services/__init__.py                       0      0   100%
+src/services/challenges.py                   102    102     0%   6-326
+src/services/gamification.py                 190    130    32%   128, 136-142, 146-157, 161-182, 191-214, 241-270, 278-281, 285-287, 298-326, 330-335, 339-346, 350-356, 360-373, 381-392, 396-420, 424-437
+src/services/indexing_service.py             167    142    15%   52-54, 58-127, 131-158, 168-234, 243-362, 366-377, 387, 395-416
+src/services/learning_service.py             116     99    15%   16-18, 22, 51-142, 152-223, 227-267, 271-432
+------------------------------------------------------------------------
+TOTAL                                       1897   1107    42%
+=========================== short test summary info ============================
+FAILED tests/integration/test_api.py::test_create_repo - fastapi.exceptions.R...
+=================== 1 failed, 1 passed, 2 warnings in 0.90s ====================

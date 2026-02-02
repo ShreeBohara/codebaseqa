@@ -8,6 +8,7 @@ from src.models.learning import Syllabus, Module, Lesson, LessonType, Persona, L
 from src.core.llm.openai_llm import OpenAILLM
 from src.core.vectorstore.chroma_store import ChromaStore
 from src.config import settings
+from src.models.codetour_schemas import CodeTour, CodeTourStep
 
 logger = logging.getLogger(__name__)
 
@@ -430,3 +431,57 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
         except Exception as e:
             logger.error(f"Failed to generate graph: {e}")
             return None
+
+    async def export_lesson_to_codetour(self, repo_id: str, lesson_id: str) -> Optional[CodeTour]:
+        """Export a lesson as a VS Code CodeTour."""
+        # 1. Find the lesson title from the cached syllabus
+        # We search all syllabi for this repo to find the lesson
+        from src.models.database import LearningSyllabus as DBSyllabus
+        
+        syllabi = self._db.query(DBSyllabus).filter(DBSyllabus.repository_id == repo_id).all()
+        lesson_title = None
+        
+        for s in syllabi:
+            data = s.syllabus_json
+            for module in data.get("modules", []):
+                for lesson in module.get("lessons", []):
+                    if lesson.get("id") == lesson_id:
+                        lesson_title = lesson.get("title")
+                        break
+                if lesson_title: break
+            if lesson_title: break
+            
+        if not lesson_title:
+            # Fallback: Try to generate or just use a generic title
+            lesson_title = f"Lesson {lesson_id}"
+            
+        # 2. Generate (or re-generate) the content
+        # Note: In a production app, we should cache the LessonContent in the DB to ensure consistency
+        content = await self.generate_lesson(repo_id, lesson_id, lesson_title)
+        
+        if not content:
+            return None
+            
+        # 3. Convert to CodeTour
+        steps = []
+        for ref in content.code_references:
+            steps.append(CodeTourStep(
+                file=ref.file_path,
+                line=ref.start_line,
+                description=f"### {ref.description}\n\nRelated to: {lesson_title}",
+                title=lesson_title
+            ))
+            
+        if not steps:
+            # Create a "Intro" step if no code references
+            steps.append(CodeTourStep(
+                file="README.md", 
+                line=1, 
+                description=f"Welcome to **{lesson_title}**.\n\n{content.content_markdown[:200]}...",
+                title="Introduction"
+            ))
+            
+        return CodeTour(
+            title=lesson_title,
+            steps=steps
+        )

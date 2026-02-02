@@ -232,6 +232,24 @@ class GamificationService:
             perfect_quizzes=user_xp.perfect_quizzes
         )
 
+    def get_activity_history(self, repo_id: str) -> Dict[str, int]:
+        """Get activity heatmap data (date -> count)."""
+        # Count lesson completions per day
+        results = self._db.query(
+            LessonProgress.completed_at
+        ).filter(
+            LessonProgress.repository_id == repo_id,
+            LessonProgress.status == "completed",
+            LessonProgress.completed_at.isnot(None)
+        ).all()
+        
+        history = {}
+        for (completed_at,) in results:
+            date_str = completed_at.strftime("%Y-%m-%d")
+            history[date_str] = history.get(date_str, 0) + 1
+            
+        return history
+
     # -------------------------------------------------------------------------
     # Streak Methods
     # -------------------------------------------------------------------------
