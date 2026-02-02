@@ -26,42 +26,44 @@ export default function Home() {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-3xl mx-auto px-6 pt-24 pb-16 text-center">
+      <section className="relative max-w-5xl mx-auto px-6 pt-32 pb-24 text-center z-10">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] -z-10" />
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="inline-flex items-center gap-2 text-sm text-indigo-400 mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-sm text-indigo-300 mb-8 backdrop-blur-md">
             <Sparkles size={14} />
-            AI-Powered Code Understanding
+            <span className="font-medium">AI-Powered Code Understanding 2.0</span>
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-4">
+          <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight mb-6">
             Understand any codebase
             <br />
-            <span className="text-zinc-500">in minutes</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">in minutes</span>
           </h1>
 
-          <p className="text-zinc-400 text-lg mb-8 max-w-xl mx-auto">
-            Ask questions about any GitHub repository and get instant, accurate answers with source references.
+          <p className="text-zinc-400 text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
+            Stop searching blindly. Ask questions, visualize data flow, and master new repositories instantly with clear source references.
           </p>
 
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/repos"
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-8 py-3.5 rounded-xl font-semibold transition-all shadow-lg shadow-white/5"
             >
               Start Exploring
-              <ArrowRight size={16} />
+              <ArrowRight size={18} />
             </Link>
             <a
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white px-8 py-3.5 rounded-xl font-medium transition-all"
             >
-              <Github size={18} />
+              <Github size={20} />
               View on GitHub
             </a>
           </div>
@@ -109,39 +111,63 @@ export default function Home() {
       </section>
 
       {/* Demo */}
-      <section className="max-w-3xl mx-auto px-6 pb-24">
+      <section className="max-w-4xl mx-auto px-6 pb-24">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
+          className="relative rounded-2xl overflow-hidden shadow-2xl shadow-indigo-500/10 border border-white/10"
         >
-          {/* Terminal header */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500/60" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/60" />
-              <div className="w-3 h-3 rounded-full bg-green-500/60" />
+          <div className="absolute inset-0 bg-zinc-900/80 backdrop-blur-sm z-0" />
+
+          {/* Fake Header */}
+          <div className="relative z-10 flex items-center gap-2 px-4 py-4 border-b border-white/5 bg-white/5">
+            <div className="flex gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-500/80" />
+              <div className="w-3 h-3 rounded-full bg-amber-500/80" />
+              <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
             </div>
-            <span className="text-xs text-zinc-500 ml-2">codebase-qa</span>
           </div>
 
           {/* Demo content */}
-          <div className="p-5 space-y-4">
+          <div className="relative z-10 p-6 space-y-6 min-h-[300px] flex flex-col justify-center">
             {/* User question */}
-            <div className="flex justify-end">
-              <div className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-xl rounded-br-sm">
+            <div className="flex justify-end items-center gap-3">
+              <div className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white px-5 py-3 rounded-2xl rounded-tr-sm shadow-lg shadow-indigo-500/20">
                 What is the main entry point?
+              </div>
+              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg">
+                <div className="text-white text-xs font-bold">You</div>
               </div>
             </div>
 
             {/* AI response */}
-            <div className="text-sm text-zinc-300">
-              <p className="mb-2">The main entry point is <code className="bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded">src/app/layout.tsx</code></p>
-              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 font-mono text-xs text-zinc-400">
-                <span className="text-indigo-400">// src/app/layout.tsx</span>
-                <br />
-                export default function RootLayout() &#123;...&#125;
+            <div className="flex items-start gap-4 max-w-[85%]">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg flex-shrink-0">
+                <Sparkles size={14} className="text-white" />
+              </div>
+              <div className="space-y-3">
+                <div className="text-zinc-300 leading-relaxed">
+                  The main entry point is <code className="bg-white/10 text-indigo-300 px-1.5 py-0.5 rounded border border-white/5">src/app/layout.tsx</code>
+                </div>
+                <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                    <span className="text-xs text-indigo-300 font-mono">src/app/layout.tsx</span>
+                  </div>
+                  <pre className="p-4 text-xs font-mono text-zinc-400 overflow-x-auto">
+                    {`export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}`}
+                  </pre>
+                </div>
               </div>
             </div>
           </div>

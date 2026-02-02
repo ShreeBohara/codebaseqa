@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, ChatMessage } from '@/lib/api-client';
 import ReactMarkdown from 'react-markdown';
-import { Send, Loader2, FileCode, ChevronDown, Copy, Check, Sparkles } from 'lucide-react';
+import { Send, Loader2, FileCode, ChevronDown, Copy, Check, Sparkles, BookOpen, Shield, Network, Zap, User, Bot } from 'lucide-react';
 
 interface Message {
     id: string;
@@ -26,11 +26,27 @@ interface ChatInterfaceProps {
     initialMessages?: ChatMessage[];
 }
 
-const suggestedQuestions = [
-    "What is the main entry point?",
-    "Explain the project structure",
-    "How does authentication work?",
-    "What technologies is this built with?",
+const suggestedActions = [
+    {
+        icon: <BookOpen className="w-5 h-5 text-indigo-400" />,
+        title: "Explain Structure",
+        prompt: "Explain the project structure and key components"
+    },
+    {
+        icon: <Shield className="w-5 h-5 text-rose-400" />,
+        title: "Auth Flow",
+        prompt: "How does authentication and authorization work?"
+    },
+    {
+        icon: <Network className="w-5 h-5 text-violet-400" />,
+        title: "Tech Stack",
+        prompt: "What technologies and libraries are used?"
+    },
+    {
+        icon: <Zap className="w-5 h-5 text-amber-400" />,
+        title: "Key Features",
+        prompt: "What are the main features of this application?"
+    }
 ];
 
 export function ChatInterface({ sessionId, repoName, initialMessages = [] }: ChatInterfaceProps) {
@@ -83,149 +99,194 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
     };
 
     return (
-        <div className="flex flex-col h-full bg-zinc-950">
+        <div className="flex flex-col h-full bg-zinc-950 relative">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto">
-                <div className="max-w-2xl mx-auto px-4 py-8">
+            <div className="flex-1 overflow-y-auto px-4 py-8 scroll-smooth">
+                <div className="max-w-4xl mx-auto space-y-8">
                     <AnimatePresence mode="popLayout">
                         {messages.length === 0 ? (
                             // Empty State with color
+                            // Modern Empty State
                             <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="flex flex-col items-center justify-center min-h-[50vh]"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex flex-col items-center justify-center min-h-[60vh] relative"
                             >
-                                {/* Colored icon */}
-                                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-6">
-                                    <Sparkles size={28} className="text-indigo-400" />
+                                {/* Background Gradient Blob */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] -z-10" />
+
+                                {/* Hero Section */}
+                                <div className="mb-12 text-center relative z-10">
+                                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/5 flex items-center justify-center mb-6 mx-auto shadow-xl shadow-indigo-500/10 backdrop-blur-sm">
+                                        <Sparkles size={32} className="text-indigo-400" />
+                                    </div>
+                                    <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">
+                                        How can I help?
+                                    </h1>
+                                    <p className="text-zinc-400 text-lg">
+                                        Ask me anything about <span className="text-indigo-400 font-medium">{repoName}</span>
+                                    </p>
                                 </div>
 
-                                <h1 className="text-2xl font-medium text-white mb-2">How can I help?</h1>
-                                <p className="text-zinc-500 mb-8 text-sm">
-                                    Ask about <span className="text-indigo-400">{repoName}</span>
-                                </p>
-
-                                {/* Colored suggestion pills */}
-                                <div className="flex flex-wrap gap-2 justify-center max-w-md">
-                                    {suggestedQuestions.map((q, i) => (
-                                        <button
+                                {/* Suggestion Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl w-full px-6">
+                                    {suggestedActions.map((action, i) => (
+                                        <motion.button
                                             key={i}
-                                            onClick={() => { setInput(q); inputRef.current?.focus(); }}
-                                            className="px-3 py-1.5 text-sm text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-full hover:border-indigo-500/50 hover:text-white transition-all"
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: i * 0.1 }}
+                                            onClick={() => { setInput(action.prompt); inputRef.current?.focus(); }}
+                                            className="group flex items-start gap-4 p-5 rounded-2xl bg-zinc-900/50 hover:bg-zinc-800/80 border border-zinc-800 hover:border-indigo-500/30 transition-all text-left backdrop-blur-sm"
                                         >
-                                            {q}
-                                        </button>
+                                            <div className="p-3 rounded-xl bg-zinc-950/50 group-hover:scale-110 transition-transform duration-300">
+                                                {action.icon}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-zinc-200 group-hover:text-white transition-colors">
+                                                    {action.title}
+                                                </h3>
+                                                <p className="text-sm text-zinc-500 group-hover:text-zinc-400">
+                                                    {action.prompt}
+                                                </p>
+                                            </div>
+                                        </motion.button>
                                     ))}
                                 </div>
                             </motion.div>
                         ) : (
                             // Messages
-                            <div className="space-y-6">
+                            <div className="space-y-8">
                                 {messages.map((message) => (
                                     <motion.div
                                         key={message.id}
-                                        initial={{ opacity: 0, y: 10 }}
+                                        initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
+                                        className={`flex gap-4 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                                     >
-                                        {message.role === 'user' ? (
-                                            // User message - INDIGO background
-                                            <div className="flex justify-end">
-                                                <div className="bg-indigo-600 text-white px-4 py-2.5 rounded-2xl rounded-br-sm max-w-[80%]">
+                                        {/* Avatar */}
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${message.role === 'user'
+                                            ? 'bg-indigo-600'
+                                            : 'bg-gradient-to-br from-purple-500 to-indigo-500'
+                                            }`}>
+                                            {message.role === 'user' ? (
+                                                <User size={20} className="text-white" />
+                                            ) : (
+                                                <Sparkles size={20} className="text-white" />
+                                            )}
+                                        </div>
+
+                                        {/* Message Bubble */}
+                                        <div className={`flex-1 overflow-hidden ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+                                            {/* Name Label */}
+                                            <div className="text-xs text-zinc-500 mb-1.5 font-medium">
+                                                {message.role === 'user' ? 'You' : 'Codebase AI'}
+                                            </div>
+
+                                            {message.role === 'user' ? (
+                                                // User Message Bubble
+                                                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 border border-white/10 text-white px-5 py-3.5 rounded-2xl rounded-tr-sm inline-block text-left text-sm leading-relaxed shadow-lg shadow-indigo-900/20">
                                                     {message.content}
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            // AI message
-                                            <div>
-                                                <div className="text-zinc-300 leading-relaxed">
-                                                    {message.isStreaming && !message.content ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <Loader2 size={16} className="animate-spin text-indigo-400" />
-                                                            <span className="text-zinc-500">Thinking...</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="prose prose-invert prose-sm max-w-none">
-                                                            <ReactMarkdown
-                                                                components={{
-                                                                    code({ className, children, ...props }) {
-                                                                        const match = /language-(\w+)/.exec(className || '');
-                                                                        const isInline = !match && String(children).length < 100 && !String(children).includes('\n');
+                                            ) : (
+                                                // AI Message Bubble (Transparent/Clean)
+                                                <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl rounded-tl-sm px-6 py-4">
+                                                    <div className="text-zinc-300 leading-relaxed">
+                                                        {message.isStreaming && !message.content ? (
+                                                            <div className="flex items-center gap-2 text-sm text-zinc-500">
+                                                                <Loader2 size={14} className="animate-spin text-indigo-400" />
+                                                                Thinking...
+                                                            </div>
+                                                        ) : (
+                                                            <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:p-0 prose-pre:border-0 prose-pre:bg-transparent">
+                                                                <ReactMarkdown
+                                                                    components={{
+                                                                        code({ className, children, ...props }) {
+                                                                            const match = /language-(\w+)/.exec(className || '');
+                                                                            const isInline = !match && String(children).length < 100 && !String(children).includes('\n');
 
-                                                                        if (isInline) {
-                                                                            return (
-                                                                                <code className="bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
-                                                                                    {children}
-                                                                                </code>
-                                                                            );
-                                                                        }
-
-                                                                        const code = String(children).replace(/\n$/, '');
-                                                                        return (
-                                                                            <div className="my-3 bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden not-prose">
-                                                                                <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-800/50">
-                                                                                    <span className="text-xs text-zinc-500">{match?.[1] || 'Code'}</span>
-                                                                                    <CopyButton text={code} />
-                                                                                </div>
-                                                                                <pre className="p-3 overflow-x-auto m-0">
-                                                                                    <code className={`text-sm text-zinc-300 ${className || ''}`} {...props}>
+                                                                            if (isInline) {
+                                                                                return (
+                                                                                    <code className="bg-zinc-800 text-zinc-200 px-1.5 py-0.5 rounded text-xs font-mono border border-zinc-700/50" {...props}>
                                                                                         {children}
                                                                                     </code>
-                                                                                </pre>
-                                                                            </div>
-                                                                        );
-                                                                    },
-                                                                    p: ({ children }) => <div className="mb-3 last:mb-0 text-zinc-300 leading-relaxed">{children}</div>,
-                                                                    ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-zinc-300">{children}</ul>,
-                                                                    ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-zinc-300">{children}</ol>,
-                                                                    strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                                                                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">{children}</a>
-                                                                }}
+                                                                                );
+                                                                            }
+
+                                                                            const code = String(children).replace(/\n$/, '');
+                                                                            return (
+                                                                                <div className="my-4 bg-zinc-950 rounded-xl border border-zinc-800 overflow-hidden not-prose shadow-sm">
+                                                                                    <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50">
+                                                                                        <span className="text-xs text-zinc-500 font-mono">{match?.[1] || 'Code'}</span>
+                                                                                        <CopyButton text={code} />
+                                                                                    </div>
+                                                                                    <pre className="p-4 overflow-x-auto m-0 text-sm leading-relaxed">
+                                                                                        <code className={`text-zinc-300 ${className || ''}`} {...props}>
+                                                                                            {children}
+                                                                                        </code>
+                                                                                    </pre>
+                                                                                </div>
+                                                                            );
+                                                                        },
+                                                                        p: ({ children }) => <div className="mb-4 last:mb-0 text-zinc-300">{children}</div>,
+                                                                        ul: ({ children }) => <ul className="list-disc pl-5 mb-4 space-y-2 text-zinc-300">{children}</ul>,
+                                                                        ol: ({ children }) => <ol className="list-decimal pl-5 mb-4 space-y-2 text-zinc-300">{children}</ol>,
+                                                                        li: ({ children }) => <li className="pl-1">{children}</li>,
+                                                                        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                                                                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors">{children}</a>
+                                                                    }}
+                                                                >
+                                                                    {message.content}
+                                                                </ReactMarkdown>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Sources */}
+                                                    {message.sources && message.sources.length > 0 && !message.isStreaming && (
+                                                        <div className="mt-4 pt-3 border-t border-zinc-800/50">
+                                                            <button
+                                                                onClick={() => toggleSources(message.id)}
+                                                                className="flex items-center gap-2 text-xs text-zinc-500 hover:text-indigo-400 transition-colors group"
                                                             >
-                                                                {message.content}
-                                                            </ReactMarkdown>
+                                                                <div className="p-1 rounded bg-zinc-800 group-hover:bg-indigo-500/10 transition-colors">
+                                                                    <FileCode size={12} />
+                                                                </div>
+                                                                {message.sources.length} sources referenced
+                                                                <ChevronDown size={12} className={`transition-transform duration-200 ${expandedSources[message.id] ? 'rotate-180' : ''}`} />
+                                                            </button>
+
+                                                            <AnimatePresence>
+                                                                {expandedSources[message.id] && (
+                                                                    <motion.div
+                                                                        initial={{ height: 0, opacity: 0 }}
+                                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                                        exit={{ height: 0, opacity: 0 }}
+                                                                        className="overflow-hidden"
+                                                                    >
+                                                                        <div className="mt-3 space-y-2">
+                                                                            {message.sources.map((src, i) => (
+                                                                                <div key={i} className="bg-zinc-950/50 rounded-lg border border-zinc-800 text-xs overflow-hidden">
+                                                                                    <div className="px-3 py-1.5 bg-zinc-900/30 border-b border-zinc-800/50 text-indigo-400 font-mono flex items-center justify-between">
+                                                                                        <span>{src.file}:{src.start_line}</span>
+                                                                                        <span className="text-zinc-600">{(src.score * 100).toFixed(0)}% relevant</span>
+                                                                                    </div>
+                                                                                    <pre className="p-3 text-zinc-500 overflow-x-auto font-mono bg-black/20">{src.content}</pre>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </motion.div>
+                                                                )}
+                                                            </AnimatePresence>
                                                         </div>
                                                     )}
                                                 </div>
-
-                                                {/* Sources */}
-                                                {message.sources && message.sources.length > 0 && !message.isStreaming && (
-                                                    <div className="mt-3">
-                                                        <button
-                                                            onClick={() => toggleSources(message.id)}
-                                                            className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-indigo-400 transition-colors"
-                                                        >
-                                                            <FileCode size={12} />
-                                                            {message.sources.length} sources
-                                                            <ChevronDown size={12} className={`transition-transform ${expandedSources[message.id] ? 'rotate-180' : ''}`} />
-                                                        </button>
-
-                                                        <AnimatePresence>
-                                                            {expandedSources[message.id] && (
-                                                                <motion.div
-                                                                    initial={{ height: 0, opacity: 0 }}
-                                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                                    exit={{ height: 0, opacity: 0 }}
-                                                                    className="overflow-hidden"
-                                                                >
-                                                                    <div className="mt-2 space-y-2">
-                                                                        {message.sources.map((src, i) => (
-                                                                            <div key={i} className="bg-zinc-900 rounded-lg border border-zinc-800 text-xs">
-                                                                                <div className="px-3 py-1.5 border-b border-zinc-800 text-indigo-400 font-mono">
-                                                                                    {src.file}:{src.start_line}
-                                                                                </div>
-                                                                                <pre className="p-2 text-zinc-500 overflow-x-auto">{src.content}</pre>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                     </motion.div>
                                 ))}
+                                {/* Spacer to prevent overlap with floating input */}
+                                <div className="h-40" aria-hidden="true" />
                                 <div ref={messagesEndRef} />
                             </div>
                         )}
@@ -233,31 +294,33 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                 </div>
             </div>
 
-            {/* Input with indigo send button */}
-            <div className="border-t border-zinc-800 bg-zinc-950 p-4">
-                <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
-                    <div className="flex items-end gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2 focus-within:border-indigo-500/50 transition-colors">
+            {/* Floating Input Area */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-30">
+                <form onSubmit={handleSubmit} className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl opacity-20 group-hover:opacity-40 transition-opacity blur duration-500" />
+
+                    <div className="relative flex items-end gap-2 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-2xl p-2 shadow-2xl ring-1 ring-white/5">
                         <textarea
                             ref={inputRef}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
                             placeholder="Ask a question..."
-                            className="flex-1 bg-transparent text-white px-2 py-2 resize-none focus:outline-none placeholder:text-zinc-600 min-h-[40px] max-h-[120px]"
+                            className="flex-1 bg-transparent text-white px-4 py-3 resize-none focus:outline-none placeholder:text-zinc-500 min-h-[48px] max-h-[160px] text-[15px] leading-relaxed"
                             rows={1}
                             disabled={isLoading}
                             onInput={(e) => {
                                 const t = e.target as HTMLTextAreaElement;
                                 t.style.height = 'auto';
-                                t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+                                t.style.height = Math.min(t.scrollHeight, 160) + 'px';
                             }}
                         />
                         <button
                             type="submit"
                             disabled={isLoading || !input.trim()}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            className="mb-1 mr-1 bg-white text-black hover:bg-zinc-200 p-2.5 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-white/5 active:scale-95"
                         >
-                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} fill="currentColor" />}
                         </button>
                     </div>
                 </form>
