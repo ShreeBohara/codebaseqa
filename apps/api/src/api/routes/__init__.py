@@ -1,2 +1,3 @@
-"""API routes package."""
-from src.api.routes import repos, chat, search, learning
+from . import repos, chat, search, learning
+
+__all__ = ["repos", "chat", "search", "learning"]
