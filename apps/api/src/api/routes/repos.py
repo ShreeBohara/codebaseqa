@@ -32,7 +32,7 @@ def run_indexing_task(repo_id: str):
             logger.error(f"Background indexing failed: {e}", exc_info=True)
         finally:
             db.close()
-    
+
     # Run in new event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -55,13 +55,13 @@ async def create_repository(
     # Parse GitHub URL
     repo_manager = RepoManager()
     owner, name = repo_manager.parse_github_url(str(repo.github_url))
-    
+
     # Check if already exists
     existing = db.query(Repository).filter(
         Repository.github_owner == owner,
         Repository.github_name == name
     ).first()
-    
+
     if existing:
         if existing.status == IndexingStatus.FAILED:
             # Allow re-indexing failed repos
@@ -75,7 +75,7 @@ async def create_repository(
             status_code=409,
             detail=f"Repository already exists with status: {existing.status}"
         )
-    
+
     # Create new repository record
     db_repo = Repository(
         github_url=str(repo.github_url),
@@ -87,10 +87,10 @@ async def create_repository(
     db.add(db_repo)
     db.commit()
     db.refresh(db_repo)
-    
+
     # Start indexing in background with sync wrapper
     background_tasks.add_task(run_indexing_task, db_repo.id)
-    
+
     return db_repo
 
 
@@ -104,7 +104,7 @@ async def list_repositories(
     query = db.query(Repository)
     total = query.count()
     repos = query.offset(skip).limit(limit).all()
-    
+
     return RepoListResponse(repositories=repos, total=total)
 
 
@@ -115,10 +115,10 @@ async def get_repository(
 ):
     """Get repository details."""
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
-    
+
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
-    
+
     return repo
 
 
@@ -129,23 +129,23 @@ async def get_indexing_progress(
 ):
     """Stream indexing progress updates via SSE."""
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
-    
+
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
-    
+
     async def progress_stream():
         """Generate SSE events for progress updates."""
         indexing_service = IndexingService(db)
-        
+
         while True:
             progress = await indexing_service.get_progress(repo_id)
             yield f"data: {json.dumps(progress)}\n\n"
-            
+
             if progress["status"] in ["completed", "failed"]:
                 break
-            
+
             await asyncio.sleep(1)
-    
+
     return StreamingResponse(
         progress_stream(),
         media_type="text/event-stream",
@@ -164,21 +164,21 @@ async def delete_repository(
 ):
     """Delete a repository and all associated data."""
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
-    
+
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
-    
+
     # Delete from vector store
     await vector_store.delete_collection(repo_id)
-    
+
     # Delete from database
     db.delete(repo)
     db.commit()
-    
+
     # Clean up local files
     repo_manager = RepoManager()
     await repo_manager.cleanup_local_repo(repo.local_path)
-    
+
     return {"status": "deleted", "repo_id": repo_id}
 
 
@@ -190,10 +190,10 @@ async def get_repo_file_content(
 ):
     """Get content of a specific file."""
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
-    
+
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
-        
+
     repo_manager = RepoManager()
     try:
         content = await repo_manager.get_file_content(repo.github_owner, repo.github_name, path)

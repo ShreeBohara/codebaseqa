@@ -28,28 +28,28 @@ async def lifespan(app: FastAPI):
     Initialize resources on startup, cleanup on shutdown.
     """
     from pathlib import Path
-    
+
     # Startup
     logger.info("Starting CodebaseQA API...")
-    
+
     # Ensure data directories exist
     Path("./data").mkdir(parents=True, exist_ok=True)
     Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.repos_dir).mkdir(parents=True, exist_ok=True)
     logger.info("Data directories initialized")
-    
+
     # Initialize database
     engine = get_db_engine()
     init_db(engine)
     logger.info("Database initialized")
-    
+
     # Initialize vector store
     vector_store = get_vector_store()
     await vector_store.initialize()
     logger.info("Vector store initialized")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down CodebaseQA API...")
     await vector_store.close()
@@ -86,9 +86,9 @@ app.include_router(learning.router, prefix="/api/learning", tags=["learning"])
 async def health_check():
     """Health check endpoint for container orchestration."""
     from src.dependencies import get_db_engine
-    
+
     checks = {"database": "ok", "vector_store": "ok"}
-    
+
     # Check database
     try:
         engine = get_db_engine()
@@ -96,7 +96,7 @@ async def health_check():
             conn.execute("SELECT 1")
     except Exception as e:
         checks["database"] = f"error: {str(e)[:50]}"
-    
+
     # Check vector store
     try:
         vs = get_vector_store()
@@ -104,9 +104,9 @@ async def health_check():
             checks["vector_store"] = "not initialized"
     except Exception as e:
         checks["vector_store"] = f"error: {str(e)[:50]}"
-    
+
     all_ok = all(v == "ok" for v in checks.values())
-    
+
     return {
         "status": "healthy" if all_ok else "degraded",
         "version": "0.1.0",

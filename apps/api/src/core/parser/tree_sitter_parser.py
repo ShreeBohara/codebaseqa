@@ -45,7 +45,7 @@ class ParseResult:
 
 class TreeSitterParser:
     """Multi-language parser using Tree-sitter."""
-    
+
     CONFIGS = {
         "python": {
             "extensions": [".py"],
@@ -69,41 +69,41 @@ class TreeSitterParser:
             "import_types": ["import_statement"],
         },
     }
-    
+
     def __init__(self, language: str):
         if language not in self.CONFIGS:
             raise ValueError(f"Unsupported language: {language}")
-        
+
         self._language = language
         self._config = self.CONFIGS[language]
         self._parser = Parser(self._config["language"])
-    
+
     def parse(self, content: str, file_path: str) -> ParseResult:
         """Parse code and extract semantic chunks."""
         tree = self._parser.parse(bytes(content, "utf-8"))
         root = tree.root_node
-        
+
         chunks = []
         imports = []
-        
+
         # Extract imports
         for child in root.children:
             if child.type in self._config["import_types"]:
                 imports.append(self._get_text(child, content))
-        
+
         import_context = '\n'.join(imports[:10]) + '\n\n' if imports else ""
-        
+
         # Extract functions and classes
         for child in root.children:
             if child.type in self._config["function_types"]:
                 chunk = self._process_function(child, content, import_context)
                 if chunk:
                     chunks.append(chunk)
-            
+
             elif child.type in self._config["class_types"]:
                 class_chunks = self._process_class(child, content, import_context)
                 chunks.extend(class_chunks)
-        
+
         # If nothing found, create module-level chunk
         if not chunks and content.strip():
             chunks.append(CodeChunk(
@@ -113,7 +113,7 @@ class TreeSitterParser:
                 end_line=content.count('\n') + 1,
                 context_before=import_context,
             ))
-        
+
         return ParseResult(
             file_path=file_path,
             language=self._language,
@@ -122,13 +122,13 @@ class TreeSitterParser:
             exports=[],
             line_count=content.count('\n') + 1,
         )
-    
+
     def _process_function(self, node: Node, content: str, context: str) -> Optional[CodeChunk]:
         """Extract function chunk."""
         name_node = self._find_child(node, "identifier")
         if not name_node:
             return None
-        
+
         return CodeChunk(
             content=self._get_text(node, content),
             chunk_type=ChunkType.FUNCTION,
@@ -138,17 +138,17 @@ class TreeSitterParser:
             docstring=self._extract_docstring(node, content),
             context_before=context,
         )
-    
+
     def _process_class(self, node: Node, content: str, context: str) -> List[CodeChunk]:
         """Extract class and method chunks."""
         chunks = []
-        
+
         name_node = self._find_child(node, "identifier")
         if not name_node:
             return chunks
-        
+
         class_name = self._get_text(name_node, content)
-        
+
         # Class chunk
         chunks.append(CodeChunk(
             content=self._get_text(node, content),
@@ -159,7 +159,7 @@ class TreeSitterParser:
             docstring=self._extract_docstring(node, content),
             context_before=context,
         ))
-        
+
         # Also extract methods
         body = self._find_child(node, "block") or self._find_child(node, "class_body")
         if body:
@@ -176,9 +176,9 @@ class TreeSitterParser:
                             name=f"{class_name}.{method_name}",
                             context_before=context,
                         ))
-        
+
         return chunks
-    
+
     def _extract_docstring(self, node: Node, content: str) -> Optional[str]:
         """Extract docstring from function/class."""
         if self._language == "python":
@@ -190,13 +190,13 @@ class TreeSitterParser:
                     if string:
                         return self._get_text(string, content).strip('"\' ')
         return None
-    
+
     def _find_child(self, node: Node, type_name: str) -> Optional[Node]:
         for child in node.children:
             if child.type == type_name:
                 return child
         return None
-    
+
     def _get_text(self, node: Node, content: str) -> str:
         return content[node.start_byte:node.end_byte]
 

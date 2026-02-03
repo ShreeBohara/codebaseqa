@@ -23,7 +23,7 @@ def get_db_engine():
     connect_args = {}
     if settings.database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
-    
+
     return create_engine(
         settings.database_url,
         connect_args=connect_args,
@@ -55,9 +55,9 @@ def get_db() -> Generator[Session, None, None]:
 def get_vector_store():
     """Get vector store instance (cached)."""
     from src.core.vectorstore.chroma_store import ChromaStore
-    
+
     embedding_service = get_embedding_service()
-    
+
     return ChromaStore(
         persist_directory=settings.chroma_persist_dir,
         embedding_service=embedding_service,
@@ -69,7 +69,7 @@ def get_vector_store():
 def get_embedding_service():
     """Get embedding service based on configuration."""
     from src.core.embeddings.openai_embeddings import OpenAIEmbeddings
-    
+
     return OpenAIEmbeddings(
         api_key=settings.openai_api_key,
         model=settings.openai_embedding_model,
@@ -81,7 +81,7 @@ def get_embedding_service():
 def get_llm_service():
     """Get LLM service based on configuration."""
     from src.core.llm.openai_llm import OpenAILLM
-    
+
     return OpenAILLM(
         api_key=settings.openai_api_key,
         model=settings.openai_model,

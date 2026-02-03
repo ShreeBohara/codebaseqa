@@ -17,7 +17,7 @@ class LearningService:
         self._db = db
         self._llm = llm
         self._vector_store = vector_store
-        
+
     def get_personas(self) -> List[Persona]:
         """Return available learning personas."""
         return [
@@ -52,9 +52,9 @@ class LearningService:
         repo = self._db.query(Repository).filter(Repository.id == repo_id).first()
         if not repo:
             raise ValueError(f"Repository {repo_id} not found")
-            
+
         persona = next((p for p in self.get_personas() if p.id == persona_id), self.get_personas()[0])
-        
+
         # 1. Gather Context (README + File Summaries)
         # Search for high-level concepts to ground the syllabus
         context_docs = await self._vector_store.search(
@@ -62,7 +62,7 @@ class LearningService:
             query_embedding=await self._vector_store._embedding_service.embed_query("architecture overview project structure"),
             limit=20
         )
-        
+
         # Filter for file summaries if possible, or just use what we got
         summaries = []
         for result in context_docs:
@@ -71,9 +71,9 @@ class LearningService:
                 summaries.append(doc)
             else:
                 summaries.append(doc[:1000] + "...")
-                
+
         context_str = "\n---\n".join(summaries)
-        
+
         # 2. Build Prompt
         prompt = f"""
 You are an expert developer creating a university-style course for a new codebase.
@@ -107,21 +107,21 @@ Return clean JSON matching this structure:
   ]
 }}
 """
-        
+
         # 3. Generate
         s_prompt = "You are a curriculum designer. Output valid JSON only."
         messages = [
             {"role": "system", "content": s_prompt},
             {"role": "user", "content": prompt}
         ]
-        
+
         response = await self._llm.generate(messages)
-        
+
         try:
             # Clean response (remove markdown code blocks if any)
             cleaned = response.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
-            
+
             return Syllabus(
                 repo_id=repo_id,
                 persona=persona_id,
@@ -151,24 +151,24 @@ Return clean JSON matching this structure:
     async def generate_lesson(self, repo_id: str, lesson_id: str, lesson_title: str) -> Optional[LessonContent]:
         """Generate detailed content for a specific lesson."""
         from src.models.learning import CodeReference
-        
+
         # 1. Gather Context
         context_docs = await self._vector_store.search(
             collection_name=repo_id,
             query_embedding=await self._vector_store._embedding_service.embed_query(lesson_title),
             limit=10
         )
-        
+
         # Extract actual file paths from metadata
         available_files = set()
         for d in context_docs:
             file_path = d.metadata.get("file_path")
             if file_path:
                 available_files.add(file_path)
-        
+
         files_list = "\n".join(sorted(available_files)) if available_files else "No files indexed."
         context_str = "\n".join([d.content[:1500] for d in context_docs])
-        
+
         # 2. Build Prompt with explicit file list
         prompt = f"""
 You are an expert technical instructor. Create a lesson titled "{lesson_title}" for this codebase.
@@ -203,15 +203,15 @@ Return clean JSON:
             {"role": "system", "content": "You are a coding instructor. Output valid JSON only."},
             {"role": "user", "content": prompt}
         ]
-        
+
         response = await self._llm.generate(messages)
-        
+
         try:
             cleaned = response.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
-            
+
             # Post-process code references to try and verify lines (optional, skipped for speed)
-            
+
             return LessonContent(
                 id=lesson_id,
                 title=lesson_title,
@@ -226,7 +226,7 @@ Return clean JSON:
     async def generate_quiz(self, repo_id: str, lesson_id: str, context_content: str) -> Optional[object]:
         """Generate a quiz validation for a lesson."""
         from src.models.learning import Quiz, Question
-        
+
         prompt = f"""
 You are a creative technical instructor.
 Based on the following lesson content, generate 3 multiple-choice questions to test the student's understanding.
@@ -252,13 +252,13 @@ Return clean JSON:
             {"role": "system", "content": "You are a quiz generator. Output valid JSON only."},
             {"role": "user", "content": prompt}
         ]
-        
+
         response = await self._llm.generate(messages)
-        
+
         try:
             cleaned = response.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
-            
+
             return Quiz(
                 lesson_id=lesson_id,
                 questions=[Question(**q) for q in data.get("questions", [])]
@@ -270,7 +270,7 @@ Return clean JSON:
     async def generate_graph(self, repo_id: str) -> Optional[object]:
         """Generate a comprehensive, high-quality dependency graph for the repository."""
         from src.models.learning import DependencyGraph, GraphNode, GraphEdge
-        
+
         # ========== MULTI-QUERY CONTEXT GATHERING ==========
         # Query 1: Core architecture files
         arch_docs = await self._vector_store.search(
@@ -280,7 +280,7 @@ Return clean JSON:
             ),
             limit=30
         )
-        
+
         # Query 2: Components and UI
         ui_docs = await self._vector_store.search(
             collection_name=repo_id,
@@ -289,7 +289,7 @@ Return clean JSON:
             ),
             limit=30
         )
-        
+
         # Query 3: Data, state, and API
         data_docs = await self._vector_store.search(
             collection_name=repo_id,
@@ -298,7 +298,7 @@ Return clean JSON:
             ),
             limit=30
         )
-        
+
         # Query 4: Utilities and helpers
         util_docs = await self._vector_store.search(
             collection_name=repo_id,
@@ -307,7 +307,7 @@ Return clean JSON:
             ),
             limit=20
         )
-        
+
         # Combine and deduplicate by file path
         all_docs = arch_docs + ui_docs + data_docs + util_docs
         seen_paths = set()
@@ -317,20 +317,20 @@ Return clean JSON:
             if path and path != "unknown" and path not in seen_paths:
                 seen_paths.add(path)
                 unique_docs.append(d)
-        
+
         # Extract file info
         available_files = sorted(list(seen_paths))
         files_list = "\n".join(available_files) if available_files else "No files indexed."
-        
+
         # Build detailed summaries
         summaries = []
         for d in unique_docs[:60]:  # Limit to avoid token overflow
             path = d.metadata.get("file_path", "unknown")
             content = d.content[:400] + "..." if len(d.content) > 400 else d.content
             summaries.append(f"### {path}\n{content}")
-        
+
         context_str = "\n\n".join(summaries)
-        
+
         # ========== ENHANCED LLM PROMPT ==========
         prompt = f"""You are an expert software architect. Analyze the codebase files below and generate a COMPREHENSIVE dependency graph.
 
@@ -389,13 +389,13 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
             {"role": "system", "content": "You are an expert codebase dependency analyzer. Output ONLY valid JSON. Be thorough and include all significant files."},
             {"role": "user", "content": prompt}
         ]
-        
+
         response = await self._llm.generate(messages)
-        
+
         try:
             cleaned = response.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
-            
+
             # Validate nodes have required fields
             nodes = []
             for n in data.get("nodes", []):
@@ -410,7 +410,7 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
                     exports=n.get("exports")
                 )
                 nodes.append(node)
-            
+
             # Validate edges
             node_ids = {n.id for n in nodes}
             edges = []
@@ -424,10 +424,10 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
                         weight=e.get("weight")
                     )
                     edges.append(edge)
-            
+
             logger.info(f"Generated graph with {len(nodes)} nodes and {len(edges)} edges")
             return DependencyGraph(nodes=nodes, edges=edges)
-            
+
         except Exception as e:
             logger.error(f"Failed to generate graph: {e}")
             return None
@@ -437,10 +437,10 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
         # 1. Find the lesson title from the cached syllabus
         # We search all syllabi for this repo to find the lesson
         from src.models.database import LearningSyllabus as DBSyllabus
-        
+
         syllabi = self._db.query(DBSyllabus).filter(DBSyllabus.repository_id == repo_id).all()
         lesson_title = None
-        
+
         for s in syllabi:
             data = s.syllabus_json
             for module in data.get("modules", []):
@@ -450,18 +450,18 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
                         break
                 if lesson_title: break
             if lesson_title: break
-            
+
         if not lesson_title:
             # Fallback: Try to generate or just use a generic title
             lesson_title = f"Lesson {lesson_id}"
-            
+
         # 2. Generate (or re-generate) the content
         # Note: In a production app, we should cache the LessonContent in the DB to ensure consistency
         content = await self.generate_lesson(repo_id, lesson_id, lesson_title)
-        
+
         if not content:
             return None
-            
+
         # 3. Convert to CodeTour
         steps = []
         for ref in content.code_references:
@@ -471,16 +471,16 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
                 description=f"### {ref.description}\n\nRelated to: {lesson_title}",
                 title=lesson_title
             ))
-            
+
         if not steps:
             # Create a "Intro" step if no code references
             steps.append(CodeTourStep(
-                file="README.md", 
-                line=1, 
+                file="README.md",
+                line=1,
                 description=f"Welcome to **{lesson_title}**.\n\n{content.content_markdown[:200]}...",
                 title="Introduction"
             ))
-            
+
         return CodeTour(
             title=lesson_title,
             steps=steps

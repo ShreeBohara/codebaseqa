@@ -80,7 +80,7 @@ class ChallengeService:
     ) -> Dict[str, Any]:
         """
         Generate an AI-powered interactive challenge from lesson context.
-        
+
         Args:
             repo_id: Repository ID
             lesson_id: Lesson ID to base challenge on
@@ -94,11 +94,11 @@ class ChallengeService:
 
         # Build prompt based on challenge type
         prompt = self._build_challenge_prompt(challenge_type, context, code_references)
-        
+
         try:
             response = await self._llm.generate(prompt)
             challenge_data = self._parse_challenge_response(response, challenge_type)
-            
+
             return {
                 "id": f"{lesson_id}_{challenge_type}_{random.randint(1000, 9999)}",
                 "lesson_id": lesson_id,
@@ -118,7 +118,7 @@ class ChallengeService:
         code_references: List[Dict] = None
     ) -> str:
         """Build LLM prompt for challenge generation."""
-        
+
         code_context = ""
         if code_references:
             for ref in code_references[:2]:  # Limit to 2 references
@@ -198,48 +198,48 @@ Focus on key concepts from the lesson that the user should know."""
                 return json.loads(json_str)
         except Exception as e:
             logger.error(f"Failed to parse challenge response: {e}")
-        
+
         # Return mock if parsing fails
         return self._generate_mock_challenge(challenge_type, "unknown")["data"]
 
     def _generate_mock_challenge(self, challenge_type: str, lesson_id: str) -> Dict[str, Any]:
         """Generate a mock challenge for testing or fallback."""
-        
+
         if challenge_type == "bug_hunt":
             mock_data = {
                 "description": "Find the authentication bug in this login handler",
                 "code_snippet": """async function handleLogin(email, password) {
   const user = await db.users.findOne({ email });
-  
+
   if (!user) {
     return { error: "User not found" };
   }
-  
+
   // Bug: Using == instead of secure comparison
   if (password == user.passwordHash) {
     const token = generateToken(user.id);
     return { success: true, token };
   }
-  
+
   return { error: "Invalid password" };
 }""",
                 "bug_line": 9,
                 "bug_description": "Comparing plain password with hash using ==, should use bcrypt.compare()",
                 "hint": "Think about how passwords should be securely compared...",
             }
-        
+
         elif challenge_type == "code_trace":
             mock_data = {
                 "description": "Trace through this array manipulation",
                 "code_snippet": """function processItems(items) {
   let result = [];
-  
+
   for (let i = 0; i < items.length; i++) {
     if (items[i] % 2 === 0) {
       result.push(items[i] * 2);
     }
   }
-  
+
   return result.length;
 }
 
@@ -249,17 +249,17 @@ Focus on key concepts from the lesson that the user should know."""
                 "correct_index": 0,
                 "explanation": "The function filters even numbers (2,4,6), doubles them, and returns the count (3).",
             }
-        
+
         elif challenge_type == "fill_blank":
             mock_data = {
                 "description": "Complete this API route handler",
                 "code_with_blanks": """app.___('/api/users/:id', async (req, res) => {
   const user = await User.___(___.params.id);
-  
+
   if (!user) {
     return res.status(404).json({ error: 'Not found' });
   }
-  
+
   res.json(user);
 });""",
                 "blanks": [
@@ -284,7 +284,7 @@ Focus on key concepts from the lesson that the user should know."""
         """Validate bug hunt answer."""
         correct_line = challenge["data"].get("bug_line", 0)
         is_correct = selected_line == correct_line
-        
+
         return {
             "correct": is_correct,
             "correct_line": correct_line,
@@ -296,7 +296,7 @@ Focus on key concepts from the lesson that the user should know."""
         """Validate code trace answer."""
         correct_index = challenge["data"].get("correct_index", 0)
         is_correct = selected_index == correct_index
-        
+
         return {
             "correct": is_correct,
             "correct_index": correct_index,
@@ -310,7 +310,7 @@ Focus on key concepts from the lesson that the user should know."""
         blanks = challenge["data"].get("blanks", [])
         results = []
         all_correct = True
-        
+
         for i, blank in enumerate(blanks):
             user_answer = answers[i] if i < len(answers) else ""
             correct = user_answer.lower() == blank["answer"].lower()
@@ -322,7 +322,7 @@ Focus on key concepts from the lesson that the user should know."""
                 "correct_answer": blank["answer"],
                 "user_answer": user_answer
             })
-        
+
         return {
             "correct": all_correct,
             "results": results,

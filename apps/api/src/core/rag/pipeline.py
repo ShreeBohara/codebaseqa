@@ -35,7 +35,7 @@ class RetrievalResult:
 
 class RAGPipeline:
     """Enhanced RAG pipeline for code Q&A."""
-    
+
     # Query expansion patterns
     QUERY_EXPANSIONS = {
         "entry point": ["main", "index", "app", "server", "start", "bootstrap", "init"],
@@ -48,7 +48,7 @@ class RAGPipeline:
         "database": ["model", "schema", "query", "db"],
         "auth": ["authentication", "login", "token", "session"],
     }
-    
+
     # Improved system prompt with structured guidance
     SYSTEM_PROMPT = """You are an expert code assistant helping developers understand a codebase.
 
@@ -81,12 +81,12 @@ Remember: Be DIRECT and PRECISE. Developers want quick, accurate answers."""
         self._vector_store = vector_store
         self._llm = llm_service
         self._repo_id = repo_id
-    
+
     def _expand_query(self, query: str) -> List[str]:
         """Expand query with synonyms and related terms."""
         queries = [query]
         query_lower = query.lower()
-        
+
         # Add expansions based on keywords
         for keyword, expansions in self.QUERY_EXPANSIONS.items():
             if keyword in query_lower:
@@ -94,7 +94,7 @@ Remember: Be DIRECT and PRECISE. Developers want quick, accurate answers."""
                     expanded = f"{query} {exp}"
                     if expanded not in queries:
                         queries.append(expanded)
-        
+
         # Add file-specific queries for common questions
         if any(term in query_lower for term in ["entry", "main", "start"]):
             queries.extend([
@@ -102,30 +102,30 @@ Remember: Be DIRECT and PRECISE. Developers want quick, accurate answers."""
                 "package.json main",
                 "app.tsx layout.tsx",
             ])
-        
+
         return queries[:5]  # Max 5 queries
-    
+
     async def retrieve(self, query: str, limit: int = 6) -> RetrievalResult:
         """Enhanced retrieval with multi-query and deduplication."""
         embedding_service = self._vector_store._embedding_service
-        
+
         # Expand query
         queries = self._expand_query(query)
         logger.info(f"Expanded '{query}' into {len(queries)} queries")
-        
+
         # Retrieve for each query
         all_chunks: Dict[str, RetrievedChunk] = {}
-        
+
         for q in queries:
             query_embedding = await embedding_service.embed_query(q)
-            
+
             results = await self._vector_store.hybrid_search(
                 collection_name=self._repo_id,
                 query_embedding=query_embedding,
                 query_text=q,
                 limit=limit,
             )
-            
+
             for r in results:
                 chunk_id = r.id
                 chunk = RetrievedChunk(
@@ -138,20 +138,20 @@ Remember: Be DIRECT and PRECISE. Developers want quick, accurate answers."""
                     chunk_name=r.metadata.get("chunk_name", ""),
                     score=r.score,
                 )
-                
+
                 # Keep highest score for duplicates
                 if chunk_id not in all_chunks or chunk.score > all_chunks[chunk_id].score:
                     all_chunks[chunk_id] = chunk
-        
+
         # Sort by score and take top results
         chunks = sorted(all_chunks.values(), key=lambda x: x.score, reverse=True)[:limit * 2]
-        
+
         # Apply LLM reranking for top chunks
         if len(chunks) > 5:
             chunks = await self._rerank_chunks(query, chunks)
-        
+
         return RetrievalResult(chunks=chunks[:limit], query=query)
-    
+
     async def _rerank_chunks(self, query: str, chunks: List[RetrievedChunk]) -> List[RetrievedChunk]:
         """Use LLM to rerank chunks by relevance."""
         try:
@@ -160,7 +160,7 @@ Remember: Be DIRECT and PRECISE. Developers want quick, accurate answers."""
             for i, c in enumerate(chunks[:15]):  # Rerank top 15
                 summary = f"{i+1}. [{c.file_path}] {c.chunk_type}: {c.chunk_name or 'unnamed'}"
                 chunk_summaries.append(summary)
-            
+
             prompt = f"""Rate the relevance of these code chunks for the question: "{query}"
 
 Chunks:
@@ -171,11 +171,11 @@ Example: 3,1,7,2,5"""
 
             messages = [{"role": "user", "content": prompt}]
             response = await self._llm.generate(messages)
-            
+
             # Parse response
             numbers = re.findall(r'\d+', response)
             indices = [int(n) - 1 for n in numbers if n.isdigit() and 0 < int(n) <= len(chunks)]
-            
+
             # Reorder chunks based on LLM ranking
             reranked = []
             seen = set()
@@ -183,57 +183,57 @@ Example: 3,1,7,2,5"""
                 if idx < len(chunks) and idx not in seen:
                     reranked.append(chunks[idx])
                     seen.add(idx)
-            
+
             # Add remaining chunks not in top picks
             for i, c in enumerate(chunks):
                 if i not in seen:
                     reranked.append(c)
-            
+
             logger.info(f"Reranked {len(chunks)} chunks, top pick: {reranked[0].file_path if reranked else 'none'}")
             return reranked
-            
+
         except Exception as e:
             logger.warning(f"Reranking failed, using original order: {e}")
             return chunks
-    
+
     def _build_context(self, chunks: List[RetrievedChunk], max_chars: int = 15000) -> str:
         """Build structured context grouped by file with size limits."""
         if not chunks:
             return "No relevant code found."
-        
+
         # Group by file
         by_file: Dict[str, List[RetrievedChunk]] = {}
         for c in chunks:
             by_file.setdefault(c.file_path, []).append(c)
-        
+
         # Build hierarchical context with size tracking
         parts = []
         total_chars = 0
-        
+
         # Add file overview first
         parts.append("### Files Referenced:")
         for file_path in by_file.keys():
             parts.append(f"- `{file_path}`")
         parts.append("")
-        
+
         # Add code by file, respecting size limit
         for file_path, file_chunks in by_file.items():
             if total_chars > max_chars:
                 parts.append(f"\n*[Context truncated - {len(by_file) - len(parts)} more files...]*")
                 break
-                
+
             parts.append(f"### {file_path}")
-            
+
             for c in file_chunks:
                 # Truncate individual chunks to max 1500 chars
                 content = c.content.strip()
                 if len(content) > 1500:
                     content = content[:1500] + "\n... [truncated]"
-                
+
                 type_label = c.chunk_type.upper()
                 name_label = f" `{c.chunk_name}`" if c.chunk_name else ""
                 parts.append(f"**{type_label}**{name_label} (L{c.start_line}-{c.end_line}):")
-                
+
                 # Determine language for syntax highlighting
                 lang = "typescript" if file_path.endswith(('.ts', '.tsx')) else \
                        "python" if file_path.endswith('.py') else \
@@ -241,13 +241,13 @@ Example: 3,1,7,2,5"""
                        "json" if file_path.endswith('.json') else \
                        "yaml" if file_path.endswith(('.yml', '.yaml')) else \
                        "markdown" if file_path.endswith('.md') else ""
-                
+
                 chunk_text = f"```{lang}\n{content}\n```\n"
                 total_chars += len(chunk_text)
                 parts.append(chunk_text)
-        
+
         return "\n".join(parts)
-    
+
     async def generate(
         self,
         query: str,
@@ -257,14 +257,14 @@ Example: 3,1,7,2,5"""
         """Generate a response (non-streaming)."""
         context_str = self._build_context(context.chunks)
         system = self.SYSTEM_PROMPT.format(context=context_str)
-        
+
         messages = [{"role": "system", "content": system}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": query})
-        
+
         return await self._llm.generate(messages)
-    
+
     async def generate_stream(
         self,
         query: str,
@@ -274,12 +274,12 @@ Example: 3,1,7,2,5"""
         """Generate a streaming response."""
         context_str = self._build_context(context.chunks)
         system = self.SYSTEM_PROMPT.format(context=context_str)
-        
+
         messages = [{"role": "system", "content": system}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": query})
-        
+
         async for token in self._llm.generate_stream(messages):
             yield token
 

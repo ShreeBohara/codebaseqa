@@ -63,13 +63,10 @@ jobs:
       run: pnpm install --no-frozen-lockfile
             
     - name: Lint
-      run: pnpm lint
-      working-directory: ./apps/web
+      run: pnpm --filter web lint
       
     - name: Type Check
-      run: pnpm tsc --noEmit
-      working-directory: ./apps/web
+      run: pnpm --filter web tsc --noEmit
 
     - name: Run Tests
-      run: pnpm test
-      working-directory: ./apps/web
+      run: pnpm --filter web test

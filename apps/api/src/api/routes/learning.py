@@ -180,10 +180,10 @@ async def submit_quiz_result(
     try:
         xp_gain = service.record_quiz_complete(repo_id, lesson_id, request.score)
         stats = service.get_user_stats(repo_id)
-        
+
         # Check for newly unlocked achievements
         achievements = service.get_unlocked_achievements(repo_id)
-        
+
         return {
             "xp_gained": xp_gain.model_dump(),
             "stats": stats.model_dump(),
@@ -255,12 +255,12 @@ async def generate_challenge(
     """Generate an interactive challenge for a lesson."""
     from src.services.challenges import ChallengeService
     from src.dependencies import get_db
-    
+
     try:
         # Create challenge service with LLM from learning service
         db = next(get_db())
         challenge_service = ChallengeService(db, learning_service._llm)
-        
+
         challenge = await challenge_service.generate_challenge(
             repo_id=repo_id,
             lesson_id=lesson_id,
@@ -288,17 +288,17 @@ async def validate_bug_hunt(
     """Validate a bug hunt challenge answer."""
     from src.services.challenges import ChallengeService
     from src.dependencies import get_db
-    
+
     try:
         db = next(get_db())
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_bug_hunt(request.challenge, request.selected_line)
-        
+
         # Award XP if correct
         if result["correct"]:
             xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
-        
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -319,17 +319,17 @@ async def validate_code_trace(
     """Validate a code trace challenge answer."""
     from src.services.challenges import ChallengeService
     from src.dependencies import get_db
-    
+
     try:
         db = next(get_db())
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_code_trace(request.challenge, request.selected_index)
-        
+
         # Award XP if correct
         if result["correct"]:
             xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
-        
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -350,17 +350,17 @@ async def validate_fill_blank(
     """Validate a fill in the blank challenge answer."""
     from src.services.challenges import ChallengeService
     from src.dependencies import get_db
-    
+
     try:
         db = next(get_db())
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_fill_blank(request.challenge, request.answers)
-        
+
         # Award XP if correct
         if result["correct"]:
             xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
-        
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

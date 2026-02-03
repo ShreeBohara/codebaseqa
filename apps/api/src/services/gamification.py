@@ -97,17 +97,17 @@ ACHIEVEMENTS: List[AchievementDef] = [
     AchievementDef(key="quiz_perfect", name="Perfect Score", description="Get 100% on a quiz", icon="🎯", category="learning", xp_reward=50),
     AchievementDef(key="quiz_master", name="Quiz Master", description="Pass 5 quizzes perfectly", icon="🏆", category="learning", xp_reward=150, requirement=5),
     AchievementDef(key="module_complete", name="Module Master", description="Complete an entire module", icon="🎓", category="learning", xp_reward=75),
-    
+
     # Streaks
     AchievementDef(key="streak_3", name="Warming Up", description="Maintain a 3-day streak", icon="🔥", category="streak", xp_reward=50, requirement=3),
     AchievementDef(key="streak_7", name="On Fire", description="Maintain a 7-day streak", icon="🔥🔥", category="streak", xp_reward=100, requirement=7),
     AchievementDef(key="streak_30", name="Unstoppable", description="Maintain a 30-day streak", icon="🔥🔥🔥", category="streak", xp_reward=500, requirement=30),
-    
+
     # Explorer
     AchievementDef(key="graph_first_view", name="Cartographer", description="View the dependency graph", icon="🗺️", category="explorer", xp_reward=25),
     AchievementDef(key="graph_nodes_10", name="Deep Diver", description="Explore 10 graph nodes", icon="🔬", category="explorer", xp_reward=50, requirement=10),
     AchievementDef(key="graph_all_layouts", name="Navigator", description="Try all graph layouts", icon="🌐", category="explorer", xp_reward=50),
-    
+
     # Challenges
     AchievementDef(key="challenge_first", name="Challenger", description="Complete your first challenge", icon="⚔️", category="challenge", xp_reward=25),
     AchievementDef(key="challenge_5", name="Bug Squasher", description="Complete 5 challenges", icon="🐛", category="challenge", xp_reward=75, requirement=5),
@@ -145,7 +145,7 @@ class GamificationService:
         """Calculate level from total XP. Returns (level, title, icon, xp_for_next)."""
         current_level = LEVEL_THRESHOLDS[0]
         next_threshold = LEVEL_THRESHOLDS[1][1] if len(LEVEL_THRESHOLDS) > 1 else float('inf')
-        
+
         for i, (level, threshold, title, icon) in enumerate(LEVEL_THRESHOLDS):
             if total_xp >= threshold:
                 current_level = (level, title, icon, threshold)
@@ -153,32 +153,32 @@ class GamificationService:
                     next_threshold = LEVEL_THRESHOLDS[i + 1][1]
                 else:
                     next_threshold = threshold  # Max level
-        
+
         return (*current_level[:3], next_threshold)
 
     def award_xp(self, repo_id: str, reason: str, amount: Optional[int] = None) -> XPGain:
         """Award XP for an action."""
         user_xp = self.get_or_create_user_xp(repo_id)
-        
+
         # Get base XP amount
         base_xp = amount if amount else XP_REWARDS.get(reason, 0)
-        
+
         # Calculate streak bonus
         streak_bonus = 0
         if user_xp.streak_days > 0 and reason in ["lesson_complete", "quiz_pass", "quiz_perfect"]:
             streak_bonus = min(user_xp.streak_days * XP_REWARDS["streak_bonus_multiplier"], 250)
-        
+
         total_gained = base_xp + streak_bonus
-        
+
         # Update user XP
         user_xp.total_xp += total_gained
-        
+
         # Recalculate level
         level, _, _, _ = self.calculate_level(user_xp.total_xp)
         user_xp.level = level
-        
+
         self._db.commit()
-        
+
         return XPGain(
             amount=base_xp,
             reason=reason,
@@ -189,28 +189,28 @@ class GamificationService:
     def get_user_stats(self, repo_id: str) -> UserStats:
         """Get complete user stats including XP, level, streak."""
         user_xp = self.get_or_create_user_xp(repo_id)
-        
+
         level, title, icon, next_threshold = self.calculate_level(user_xp.total_xp)
-        
+
         # Find current level's threshold
         current_threshold = 0
         for lvl, thresh, _, _ in LEVEL_THRESHOLDS:
             if lvl == level:
                 current_threshold = thresh
                 break
-        
+
         # Calculate progress to next level
         xp_in_level = user_xp.total_xp - current_threshold
         xp_needed = next_threshold - current_threshold
         progress = min(xp_in_level / xp_needed, 1.0) if xp_needed > 0 else 1.0
-        
+
         # Check if active today
         today = datetime.utcnow().date()
         active_today = bool(
-            user_xp.last_activity_date and 
+            user_xp.last_activity_date and
             user_xp.last_activity_date.date() == today
         )
-        
+
         return UserStats(
             total_xp=user_xp.total_xp,
             level=LevelInfo(
@@ -242,12 +242,12 @@ class GamificationService:
             LessonProgress.status == "completed",
             LessonProgress.completed_at.isnot(None)
         ).all()
-        
+
         history = {}
         for (completed_at,) in results:
             date_str = completed_at.strftime("%Y-%m-%d")
             history[date_str] = history.get(date_str, 0) + 1
-            
+
         return history
 
     # -------------------------------------------------------------------------
@@ -258,10 +258,10 @@ class GamificationService:
         """Update streak based on activity. Call this when user completes any action."""
         user_xp = self.get_or_create_user_xp(repo_id)
         today = datetime.utcnow().date()
-        
+
         if user_xp.last_activity_date:
             last_date = user_xp.last_activity_date.date()
-            
+
             if last_date == today:
                 # Already active today
                 return user_xp.streak_days
@@ -274,17 +274,17 @@ class GamificationService:
         else:
             # First activity
             user_xp.streak_days = 1
-        
+
         # Update longest streak
         if user_xp.streak_days > user_xp.longest_streak:
             user_xp.longest_streak = user_xp.streak_days
-        
+
         user_xp.last_activity_date = datetime.utcnow()
         self._db.commit()
-        
+
         # Check streak achievements
         self._check_streak_achievements(repo_id, user_xp.streak_days)
-        
+
         return user_xp.streak_days
 
     # -------------------------------------------------------------------------
@@ -301,7 +301,7 @@ class GamificationService:
     def get_all_achievements(self, repo_id: str) -> List[Dict]:
         """Get all achievements with unlock status."""
         unlocked = set(self.get_unlocked_achievements(repo_id))
-        
+
         return [
             {
                 **a.model_dump(),
@@ -317,15 +317,15 @@ class GamificationService:
             Achievement.repository_id == repo_id,
             Achievement.achievement_key == achievement_key
         ).first()
-        
+
         if existing:
             return None  # Already unlocked
-        
+
         achievement_def = ACHIEVEMENT_MAP.get(achievement_key)
         if not achievement_def:
             logger.warning(f"Unknown achievement key: {achievement_key}")
             return None
-        
+
         # Create achievement record
         achievement = Achievement(
             repository_id=repo_id,
@@ -334,13 +334,13 @@ class GamificationService:
             xp_awarded=achievement_def.xp_reward
         )
         self._db.add(achievement)
-        
+
         # Award XP
         self.award_xp(repo_id, f"achievement_{achievement_key}", achievement_def.xp_reward)
-        
+
         self._db.commit()
         logger.info(f"Achievement unlocked: {achievement_key} for repo {repo_id}")
-        
+
         return achievement_def
 
     def _check_streak_achievements(self, repo_id: str, streak: int):
@@ -355,7 +355,7 @@ class GamificationService:
     def check_lesson_achievements(self, repo_id: str):
         """Check and unlock lesson-based achievements."""
         user_xp = self.get_or_create_user_xp(repo_id)
-        
+
         if user_xp.lessons_completed >= 1:
             self.unlock_achievement(repo_id, "first_lesson")
         if user_xp.lessons_completed >= 5:
@@ -366,17 +366,17 @@ class GamificationService:
     def check_quiz_achievements(self, repo_id: str, is_perfect: bool):
         """Check and unlock quiz-based achievements."""
         user_xp = self.get_or_create_user_xp(repo_id)
-        
+
         if is_perfect:
             self.unlock_achievement(repo_id, "quiz_perfect")
-        
+
         if user_xp.perfect_quizzes >= 5:
             self.unlock_achievement(repo_id, "quiz_master")
 
     def check_challenge_achievements(self, repo_id: str, is_perfect: bool):
         """Check and unlock challenge-based achievements."""
         user_xp = self.get_or_create_user_xp(repo_id)
-        
+
         if user_xp.challenges_completed >= 1:
             self.unlock_achievement(repo_id, "challenge_first")
         if user_xp.challenges_completed >= 5:
@@ -399,36 +399,36 @@ class GamificationService:
         user_xp = self.get_or_create_user_xp(repo_id)
         user_xp.lessons_completed += 1
         self._db.commit()
-        
+
         # Update streak
         self.update_streak(repo_id)
-        
+
         # Check achievements
         self.check_lesson_achievements(repo_id)
-        
+
         # Award XP
         return self.award_xp(repo_id, "lesson_complete")
 
     def record_quiz_complete(self, repo_id: str, lesson_id: str, score: float) -> XPGain:
         """Record quiz completion and award XP based on score."""
         user_xp = self.get_or_create_user_xp(repo_id)
-        
+
         is_perfect = score >= 1.0
         is_pass = score >= 0.7
-        
+
         if is_pass:
             user_xp.quizzes_passed += 1
         if is_perfect:
             user_xp.perfect_quizzes += 1
-        
+
         self._db.commit()
-        
+
         # Update streak
         self.update_streak(repo_id)
-        
+
         # Check achievements
         self.check_quiz_achievements(repo_id, is_perfect)
-        
+
         # Award XP
         if is_perfect:
             return self.award_xp(repo_id, "quiz_perfect")
@@ -442,12 +442,12 @@ class GamificationService:
         user_xp = self.get_or_create_user_xp(repo_id)
         user_xp.challenges_completed += 1
         self._db.commit()
-        
+
         is_perfect = not used_hint
-        
+
         # Check achievements
         self.check_challenge_achievements(repo_id, is_perfect)
-        
+
         # Award XP
         if is_perfect:
             return self.award_xp(repo_id, "challenge_perfect")
