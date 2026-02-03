@@ -44,10 +44,6 @@ jobs:
 
   frontend-check:
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: ./apps/web
 
     steps:
     - uses: actions/checkout@v4
@@ -68,9 +64,12 @@ jobs:
             
     - name: Lint
       run: pnpm lint
+      working-directory: ./apps/web
       
     - name: Type Check
       run: pnpm tsc --noEmit
+      working-directory: ./apps/web
 
     - name: Run Tests
       run: pnpm test
+      working-directory: ./apps/web
