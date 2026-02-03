@@ -3,17 +3,17 @@ Dependency injection for FastAPI.
 Provides database sessions, services, and other dependencies.
 """
 
+from functools import lru_cache
 from typing import Generator
+
 from fastapi import Depends
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from functools import lru_cache
+from sqlalchemy.orm import Session, sessionmaker
 
+from src.config import settings
 from src.core.llm.openai_llm import OpenAILLM
 from src.core.vectorstore.chroma_store import ChromaStore
 from src.services.learning_service import LearningService
-
-from src.config import settings
 
 
 # Database

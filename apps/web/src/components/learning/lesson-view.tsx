@@ -2,17 +2,22 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { LessonContent, CodeReference, Quiz, Challenge, api } from '@/lib/api-client';
-import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, BookOpen, Target, Copy, Check, Bug, Eye, Edit3, Download } from 'lucide-react';
+import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, Check, Bug, Eye, Edit3, Download } from 'lucide-react';
 import { QuizView } from './quiz-view';
 import { MermaidDiagram } from './MermaidDiagram';
 import { ChallengeView } from './ChallengeView';
 import confetti from 'canvas-confetti';
 
+interface XPGainResult {
+    amount: number;
+    reason: string;
+}
+
 interface LessonViewProps {
     repoId: string;
     content: LessonContent;
     onClose: () => void;
-    onComplete?: (xpGain: any) => void;
+    onComplete?: (xpGain: XPGainResult) => void;
 }
 
 export function LessonView({ repoId, content, onClose, onComplete }: LessonViewProps) {

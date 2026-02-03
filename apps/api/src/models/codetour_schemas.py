@@ -4,7 +4,9 @@ Reference: https://github.com/microsoft/codetour
 """
 
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
+
 
 class CodeTourStep(BaseModel):
     """A single step in a CodeTour."""

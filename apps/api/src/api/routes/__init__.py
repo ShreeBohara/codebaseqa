@@ -1,3 +1,3 @@
-from . import repos, chat, search, learning
+from . import chat, learning, repos, search
 
 __all__ = ["repos", "chat", "search", "learning"]

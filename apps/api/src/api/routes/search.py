@@ -2,13 +2,14 @@
 Search endpoints for semantic code search.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 import time
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
 from src.dependencies import get_db, get_vector_store
-from src.models.schemas import SearchQuery, SearchResponse, SearchResult, ChunkType
 from src.models.database import Repository
+from src.models.schemas import ChunkType, SearchQuery, SearchResponse, SearchResult
 
 router = APIRouter()
 

@@ -4,8 +4,9 @@ Uses text-embedding-3-small by default.
 """
 
 from typing import List
-from openai import AsyncOpenAI
+
 import tiktoken
+from openai import AsyncOpenAI
 
 
 class OpenAIEmbeddings:

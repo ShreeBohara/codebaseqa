@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { getBezierPath, EdgeLabelRenderer, BaseEdge } from '@xyflow/react';
+import { getBezierPath, EdgeLabelRenderer, BaseEdge, Position } from '@xyflow/react';
 import { motion } from 'framer-motion';
 
 // Edge type configuration
@@ -68,8 +68,8 @@ interface CustomEdgeProps {
     sourceY: number;
     targetX: number;
     targetY: number;
-    sourcePosition: any;
-    targetPosition: any;
+    sourcePosition: Position;
+    targetPosition: Position;
     data?: CustomEdgeData;
     selected?: boolean;
     markerEnd?: string;

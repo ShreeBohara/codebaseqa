@@ -32,7 +32,7 @@ class TestTreeSitterParser:
 
     def test_python_parse_classes(self, sample_python_code):
         """Test parsing Python classes and methods."""
-        from src.core.parser.tree_sitter_parser import TreeSitterParser, ChunkType
+        from src.core.parser.tree_sitter_parser import ChunkType, TreeSitterParser
 
         parser = TreeSitterParser("python")
         result = parser.parse(sample_python_code, "test.py")

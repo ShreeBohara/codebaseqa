@@ -1,2 +1,2 @@
 """RAG package."""
-from src.core.rag.pipeline import RAGPipeline
+from src.core.rag.pipeline import RAGPipeline as RAGPipeline

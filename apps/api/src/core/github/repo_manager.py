@@ -3,12 +3,12 @@ GitHub repository manager.
 Handles cloning, updating, and managing local repository copies.
 """
 
+import logging
 import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Tuple, Optional
-import logging
+from typing import Optional, Tuple
 
 from src.config import settings
 

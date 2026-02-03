@@ -1,12 +1,13 @@
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from src.services.learning_service import LearningService
-from src.services.gamification import GamificationService, UserStats, XPGain, AchievementDef
-from src.models.learning import Syllabus, Persona, LessonContent
+from src.dependencies import get_gamification_service, get_learning_service
 from src.models.codetour_schemas import CodeTour
-from src.dependencies import get_learning_service, get_gamification_service
+from src.models.learning import LessonContent, Persona, Syllabus
+from src.services.gamification import GamificationService, UserStats
+from src.services.learning_service import LearningService
 
 router = APIRouter(tags=["learning"])
 
@@ -43,7 +44,6 @@ async def generate_lesson(
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate content for a specific lesson."""
-    from src.models.learning import LessonContent
     try:
         content = await service.generate_lesson(repo_id, lesson_id, request.title)
         if not content:
@@ -63,7 +63,6 @@ async def generate_quiz(
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate a quiz for a lesson."""
-    from src.models.learning import Quiz
     try:
         quiz = await service.generate_quiz(repo_id, lesson_id, request.context_content)
         if not quiz:
@@ -181,8 +180,8 @@ async def submit_quiz_result(
         xp_gain = service.record_quiz_complete(repo_id, lesson_id, request.score)
         stats = service.get_user_stats(repo_id)
 
-        # Check for newly unlocked achievements
-        achievements = service.get_unlocked_achievements(repo_id)
+        # Check for newly unlocked achievements (future: include in response)
+        _ = service.get_unlocked_achievements(repo_id)
 
         return {
             "xp_gained": xp_gain.model_dump(),
@@ -253,8 +252,8 @@ async def generate_challenge(
     learning_service: LearningService = Depends(get_learning_service)
 ):
     """Generate an interactive challenge for a lesson."""
-    from src.services.challenges import ChallengeService
     from src.dependencies import get_db
+    from src.services.challenges import ChallengeService
 
     try:
         # Create challenge service with LLM from learning service
@@ -286,8 +285,8 @@ async def validate_bug_hunt(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Validate a bug hunt challenge answer."""
-    from src.services.challenges import ChallengeService
     from src.dependencies import get_db
+    from src.services.challenges import ChallengeService
 
     try:
         db = next(get_db())
@@ -317,8 +316,8 @@ async def validate_code_trace(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Validate a code trace challenge answer."""
-    from src.services.challenges import ChallengeService
     from src.dependencies import get_db
+    from src.services.challenges import ChallengeService
 
     try:
         db = next(get_db())
@@ -348,8 +347,8 @@ async def validate_fill_blank(
     gamification: GamificationService = Depends(get_gamification_service)
 ):
     """Validate a fill in the blank challenge answer."""
-    from src.services.challenges import ChallengeService
     from src.dependencies import get_db
+    from src.services.challenges import ChallengeService
 
     try:
         db = next(get_db())

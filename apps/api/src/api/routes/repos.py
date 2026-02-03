@@ -2,18 +2,19 @@
 Repository management endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 import asyncio
 import json
 import logging
 
-from src.dependencies import get_db, get_vector_store, get_session_factory
-from src.models.schemas import RepoCreate, RepoResponse, RepoListResponse
-from src.models.database import Repository, IndexingStatus
-from src.services.indexing_service import IndexingService
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
 from src.core.github.repo_manager import RepoManager
+from src.dependencies import get_db, get_session_factory, get_vector_store
+from src.models.database import IndexingStatus, Repository
+from src.models.schemas import RepoCreate, RepoListResponse, RepoResponse
+from src.services.indexing_service import IndexingService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

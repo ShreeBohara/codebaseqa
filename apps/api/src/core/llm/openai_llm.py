@@ -2,10 +2,11 @@
 OpenAI LLM service with streaming support.
 """
 
-from typing import List, Dict, AsyncGenerator
-from openai import AsyncOpenAI
 import asyncio
 import logging
+from typing import AsyncGenerator, Dict, List
+
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 

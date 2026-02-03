@@ -3,12 +3,13 @@ ChromaDB vector store implementation.
 Supports semantic and hybrid search.
 """
 
-from typing import List, Dict, Any, Optional
-import chromadb
-from chromadb.config import Settings
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Any, Dict, List
+
+import chromadb
+from chromadb.config import Settings
 
 
 @dataclass

@@ -1,8 +1,5 @@
 import datetime
-
-import pytest
 from unittest.mock import MagicMock, patch
-from src.models.schemas import RepoCreate
 
 
 def test_list_repos_empty(client):
@@ -29,7 +26,7 @@ def test_create_repo(client):
         "github_url": "https://github.com/fastapi/fastapi"
     }
 
-    with patch("src.api.routes.repos.get_db") as mock_get_db, \
+    with patch("src.api.routes.repos.get_db"), \
          patch("src.api.routes.repos.IndexingService") as MockIndexingService:
 
         # Mock DB

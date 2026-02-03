@@ -1,14 +1,14 @@
 import json
 import logging
 from typing import List, Optional
+
 from sqlalchemy.orm import Session
 
-from src.models.database import Repository
-from src.models.learning import Syllabus, Module, Lesson, LessonType, Persona, LessonContent
 from src.core.llm.openai_llm import OpenAILLM
 from src.core.vectorstore.chroma_store import ChromaStore
-from src.config import settings
 from src.models.codetour_schemas import CodeTour, CodeTourStep
+from src.models.database import Repository
+from src.models.learning import Lesson, LessonContent, Module, Persona, Syllabus
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ Return clean JSON matching this structure:
                         title=m.get("title"),
                         description=m.get("description"),
                         lessons=[
-                            Lesson(**l) for l in m.get("lessons", [])
+                            Lesson(**lesson_data) for lesson_data in m.get("lessons", [])
                         ]
                     ) for m in data.get("modules", [])
                 ]
@@ -225,7 +225,7 @@ Return clean JSON:
 
     async def generate_quiz(self, repo_id: str, lesson_id: str, context_content: str) -> Optional[object]:
         """Generate a quiz validation for a lesson."""
-        from src.models.learning import Quiz, Question
+        from src.models.learning import Question, Quiz
 
         prompt = f"""
 You are a creative technical instructor.
@@ -269,7 +269,7 @@ Return clean JSON:
 
     async def generate_graph(self, repo_id: str) -> Optional[object]:
         """Generate a comprehensive, high-quality dependency graph for the repository."""
-        from src.models.learning import DependencyGraph, GraphNode, GraphEdge
+        from src.models.learning import DependencyGraph, GraphEdge, GraphNode
 
         # ========== MULTI-QUERY CONTEXT GATHERING ==========
         # Query 1: Core architecture files
@@ -448,8 +448,10 @@ Generate a DENSE graph with many connections. Aim for 20-40 edges minimum."""
                     if lesson.get("id") == lesson_id:
                         lesson_title = lesson.get("title")
                         break
-                if lesson_title: break
-            if lesson_title: break
+                if lesson_title:
+                    break
+            if lesson_title:
+                break
 
         if not lesson_title:
             # Fallback: Try to generate or just use a generic title

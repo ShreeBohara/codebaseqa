@@ -42,7 +42,7 @@ export function BentoGrid() {
                         </div>
                         <h3 className="text-2xl font-semibold text-white mb-2">Interactive Dependency Graph</h3>
                         <p className="text-zinc-400 max-w-sm">
-                            Don't just read code, see it. Automatically generate and explore component relationships, API calls, and database schema connections.
+                            Don&apos;t just read code, see it. Automatically generate and explore component relationships, API calls, and database schema connections.
                         </p>
                     </div>
 
@@ -89,7 +89,7 @@ export function BentoGrid() {
                     </div>
                     <h3 className="text-xl font-semibold text-white mb-2">Personalized Syllabi</h3>
                     <p className="text-sm text-zinc-400 mb-4">
-                        AI-generated courses tailored to your role. From "New Hire" to "Senior Architect".
+                        AI-generated courses tailored to your role. From &quot;New Hire&quot; to &quot;Senior Architect&quot;.
                     </p>
                     <div className="space-y-2">
                         {['Architecture', 'Auth Flow', 'Database'].map((item, i) => (

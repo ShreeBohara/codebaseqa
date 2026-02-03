@@ -3,20 +3,20 @@ Repository indexing service.
 Handles cloning, parsing, and embedding of code repositories.
 """
 
-import os
 import hashlib
 import logging
-from pathlib import Path
-from typing import Dict, Any, List
+import os
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 from sqlalchemy.orm import Session
 
 from src.config import settings
-from src.models.database import Repository, CodeFile, CodeChunk, IndexingStatus
 from src.core.github.repo_manager import RepoManager
 from src.core.parser.tree_sitter_parser import get_parser_for_file
-from src.dependencies import get_vector_store, get_embedding_service
+from src.dependencies import get_embedding_service, get_vector_store
+from src.models.database import CodeChunk, CodeFile, IndexingStatus, Repository
 
 logger = logging.getLogger(__name__)
 

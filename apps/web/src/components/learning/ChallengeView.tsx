@@ -8,7 +8,7 @@ interface Challenge {
     id: string;
     lesson_id: string;
     challenge_type: string;
-    data: any;
+    data: Record<string, unknown>;
     completed: boolean;
     used_hint: boolean;
 }
@@ -396,7 +396,7 @@ function FillBlankChallenge({ data, onComplete, showHint }: FillBlankChallengePr
 
     // Render code with interactive blanks
     const renderCodeWithBlanks = () => {
-        let codeDisplay = data.code_with_blanks;
+        const codeDisplay = data.code_with_blanks;
 
         return (
             <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap">

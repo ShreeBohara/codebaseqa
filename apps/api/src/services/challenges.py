@@ -3,10 +3,11 @@ Challenge Generation Service for Learning Path.
 Generates interactive challenges: Bug Hunt, Code Trace, Fill in Blank.
 """
 
-import logging
 import json
+import logging
 import random
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List
+
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 

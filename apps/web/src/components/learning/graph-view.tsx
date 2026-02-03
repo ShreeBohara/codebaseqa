@@ -33,18 +33,52 @@ interface GraphViewProps {
 const nodeWidth = 200;
 const nodeHeight = 70;
 
+// Type definitions for graph data
+interface GraphNodeData {
+    label: string;
+    description?: string;
+    filePath: string;
+    fileType: string;
+    importance?: number;
+    linesOfCode?: number;
+    group?: string;
+    exports?: string[];
+}
+
+interface GraphNode {
+    id: string;
+    type: string;
+    data: GraphNodeData;
+    position: { x: number; y: number };
+}
+
+interface GraphEdgeData {
+    label?: string;
+    type?: string;
+    weight?: number;
+}
+
+interface GraphEdge {
+    id: string;
+    source: string;
+    target: string;
+    type: string;
+    data: GraphEdgeData;
+    animated: boolean;
+}
+
 // Register custom node and edge types
 const nodeTypes = {
-    custom: CustomNode as any,
+    custom: CustomNode as React.ComponentType,
 };
 
 const edgeTypes = {
-    custom: CustomEdge as any,
+    custom: CustomEdge as React.ComponentType,
 };
 
 export function GraphView({ repoId }: GraphViewProps) {
-    const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
-    const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
+    const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -55,8 +89,8 @@ export function GraphView({ repoId }: GraphViewProps) {
     const hasFetchedRef = useRef(false);
     const isFetchingRef = useRef(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const rawNodesRef = useRef<any[]>([]);  // Store nodes without layout
-    const rawEdgesRef = useRef<any[]>([]);  // Store edges
+    const rawNodesRef = useRef<GraphNode[]>([]);  // Store nodes without layout
+    const rawEdgesRef = useRef<GraphEdge[]>([]);  // Store edges
 
     const loadGraph = useCallback(async (force = false) => {
         // Prevent concurrent fetches
@@ -78,7 +112,7 @@ export function GraphView({ repoId }: GraphViewProps) {
             }
 
             // Create nodes with custom type and data (including new fields)
-            const initialNodes = data.nodes.map((n: any) => {
+            const initialNodes = data.nodes.map((n: DependencyGraph['nodes'][number]) => {
                 const fileType = n.type || detectFileType(n.id);
                 return {
                     id: n.id,
@@ -100,9 +134,10 @@ export function GraphView({ repoId }: GraphViewProps) {
 
             // Filter and create edges with enhanced data
             const nodeIds = new Set(initialNodes.map((n) => n.id));
+            type EdgeType = NonNullable<DependencyGraph['edges']>[number];
             const initialEdges = (data.edges || [])
-                .filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target))
-                .map((e: any) => ({
+                .filter((e: EdgeType) => nodeIds.has(e.source) && nodeIds.has(e.target))
+                .map((e: EdgeType) => ({
                     id: `${e.source}-${e.target}`,
                     source: e.source,
                     target: e.target,
@@ -142,27 +177,27 @@ export function GraphView({ repoId }: GraphViewProps) {
 
     // Filter nodes based on search
     const filteredNodes = searchQuery
-        ? nodes.filter((n: any) =>
+        ? nodes.filter((n) =>
             n.data.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
             n.data.filePath.toLowerCase().includes(searchQuery.toLowerCase())
         )
         : nodes;
 
     // Minimap node color function
-    const getMinimapNodeColor = (node: any) => {
+    const getMinimapNodeColor = (node: { data?: { fileType?: string } }) => {
         const fileType = node.data?.fileType || 'default';
         return FILE_TYPES[fileType as keyof typeof FILE_TYPES]?.color || '#6366f1';
     };
 
     // Get selected node data
-    const selectedNodeData = selectedNode ? nodes.find((n: any) => n.id === selectedNode) : null;
+    const selectedNodeData = selectedNode ? nodes.find((n) => n.id === selectedNode) : null;
 
     // Compute incoming and outgoing edges for selected node
     const incomingEdges = selectedNode
-        ? edges.filter((e: any) => e.target === selectedNode).map((e: any) => ({ source: e.source, label: e.data?.label }))
+        ? edges.filter((e) => e.target === selectedNode).map((e) => ({ source: e.source, label: e.data?.label }))
         : [];
     const outgoingEdges = selectedNode
-        ? edges.filter((e: any) => e.source === selectedNode).map((e: any) => ({ target: e.target, label: e.data?.label }))
+        ? edges.filter((e) => e.source === selectedNode).map((e) => ({ target: e.target, label: e.data?.label }))
         : [];
 
     // Handle layout change

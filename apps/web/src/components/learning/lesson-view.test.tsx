@@ -19,14 +19,14 @@ vi.mock('canvas-confetti', () => ({
 // Mock Framer Motion to avoid animation issues in tests
 vi.mock('framer-motion', () => ({
     motion: {
-        div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+        div: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => <div {...props}>{children}</div>,
     },
-    AnimatePresence: ({ children }: any) => <>{children}</>,
+    AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }))
 
 // Mock child components to simplify testing
 vi.mock('./quiz-view', () => ({
-    QuizView: ({ onClose }: any) => (
+    QuizView: ({ onClose }: { onClose: () => void }) => (
         <div data-testid="quiz-view">
             <h1>Quiz Interface</h1>
             <button onClick={onClose}>Close Quiz</button>
@@ -128,7 +128,7 @@ describe('LessonView', () => {
     it('handles completion', async () => {
         vi.mocked(api.completeLesson).mockResolvedValueOnce({
             xp_gained: { amount: 100, reason: 'Completed' },
-            stats: {} as any
+            stats: {} as Record<string, unknown>
         })
 
         render(

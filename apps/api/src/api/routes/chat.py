@@ -2,15 +2,21 @@
 Chat endpoints with SSE streaming support.
 """
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import json
 
-from src.dependencies import get_db, get_llm_service, get_vector_store
-from src.models.schemas import ChatMessageCreate, ChatSessionCreate, ChatSessionResponse, ChatMessageResponse
-from src.models.database import Repository, ChatSession, ChatMessage
 from src.core.rag.pipeline import RAGPipeline
+from src.dependencies import get_db, get_llm_service, get_vector_store
+from src.models.database import ChatMessage, ChatSession, Repository
+from src.models.schemas import (
+    ChatMessageCreate,
+    ChatMessageResponse,
+    ChatSessionCreate,
+    ChatSessionResponse,
+)
 
 router = APIRouter()
 

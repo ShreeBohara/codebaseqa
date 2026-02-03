@@ -4,11 +4,10 @@ Combines retrieval and generation for answering questions about codebases.
 Enhanced with query expansion, multi-query retrieval, and LLM reranking.
 """
 
-from typing import List, Dict, Optional, AsyncGenerator, Set
-from dataclasses import dataclass
 import logging
-import asyncio
 import re
+from dataclasses import dataclass
+from typing import AsyncGenerator, Dict, List
 
 logger = logging.getLogger(__name__)
 

@@ -2,16 +2,17 @@
 FastAPI application entry point.
 """
 
+import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import logging
 
+from src.api.routes import chat, learning, repos, search
 from src.config import settings
-from src.api.routes import repos, chat, search, learning
-from src.models.database import init_db
 from src.dependencies import get_db_engine, get_vector_store
+from src.models.database import init_db
 
 # Configure logging
 logging.basicConfig(

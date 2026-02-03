@@ -187,7 +187,7 @@ export interface Challenge {
   id: string;
   lesson_id: string;
   challenge_type: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   completed: boolean;
   used_hint: boolean;
 }
@@ -409,7 +409,7 @@ class ApiClient {
     return res.json();
   }
 
-  async validateChallenge(repoId: string, challengeType: string, challenge: Challenge, answer: any): Promise<ChallengeResult> {
+  async validateChallenge(repoId: string, challengeType: string, challenge: Challenge, answer: number | string[]): Promise<ChallengeResult> {
     const endpoint = `${this.baseUrl}/api/learning/${repoId}/challenges/validate/${challengeType}`;
     const body = challengeType === 'bug_hunt'
       ? { challenge, selected_line: answer }

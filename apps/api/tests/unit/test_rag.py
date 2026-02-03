@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from src.core.rag.pipeline import RAGPipeline, RetrievalResult, RetrievedChunk
+
+import pytest
+
+from src.core.rag.pipeline import RAGPipeline
 
 
 @pytest.fixture

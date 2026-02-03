@@ -3,10 +3,10 @@ Configuration management with environment variable support.
 Designed for easy self-hosting with sensible defaults.
 """
 
-from typing import List, Optional
-from pydantic_settings import BaseSettings
-from pydantic import Field
 from functools import lru_cache
+from typing import List, Optional
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

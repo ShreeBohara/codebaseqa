@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, ArrowRight, RotateCcw, Award } from 'lucide-react';
-import { Quiz, Question } from '@/lib/api-client';
+import { Check, X, ArrowRight, Award } from 'lucide-react';
+import { Quiz } from '@/lib/api-client';
 import confetti from 'canvas-confetti';
 
 interface QuizViewProps {

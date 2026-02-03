@@ -1,8 +1,11 @@
+from typing import AsyncGenerator
+
 import pytest
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
+
 from src.main import app
-from typing import AsyncGenerator
+
 
 @pytest.fixture
 def client() -> TestClient:

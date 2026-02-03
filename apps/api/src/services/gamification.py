@@ -5,11 +5,12 @@ Handles XP rewards, levels, streaks, and achievements.
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Tuple
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from typing import Dict, List, Optional, Tuple
 
-from src.models.database import UserXP, Achievement, LessonProgress
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from src.models.database import Achievement, LessonProgress, UserXP
 
 logger = logging.getLogger(__name__)
 

@@ -118,7 +118,15 @@ export function DashboardView({ stats, achievements, activity }: DashboardViewPr
     );
 }
 
-function DashboardCard({ icon, label, value, subValue, gradient }: any) {
+interface DashboardCardProps {
+    icon: React.ReactNode;
+    label: string;
+    value: string | number;
+    subValue?: string;
+    gradient: string;
+}
+
+function DashboardCard({ icon, label, value, subValue, gradient }: DashboardCardProps) {
     return (
         <div className={`rounded-2xl p-5 border border-zinc-800 bg-gradient-to-br ${gradient} bg-zinc-900/30`}>
             <div className="flex items-start justify-between mb-4">
@@ -135,7 +143,13 @@ function DashboardCard({ icon, label, value, subValue, gradient }: any) {
     );
 }
 
-function StatRow({ label, value, icon }: any) {
+interface StatRowProps {
+    label: string;
+    value: string | number;
+    icon: React.ReactNode;
+}
+
+function StatRow({ label, value, icon }: StatRowProps) {
     return (
         <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/30 border border-zinc-800/50">
             <div className="flex items-center gap-3">

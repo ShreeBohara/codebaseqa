@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileCode, ExternalLink, ArrowRight, BookOpen, Code, Layers, Clock } from 'lucide-react';
+import { X, FileCode, ExternalLink, ArrowRight, BookOpen, Code } from 'lucide-react';
 import { FILE_TYPES, FileType } from './CustomNode';
 
 interface NodeDetailPanelProps {

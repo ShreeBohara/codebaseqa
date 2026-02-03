@@ -1,21 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Syllabus, Module, Lesson } from '@/lib/api-client';
+import { Syllabus, Lesson } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    BookOpen, Code, Terminal, Clock, ChevronDown,
-    Play, CheckCircle2, Circle, Sparkles
+    BookOpen, Clock, ChevronDown,
+    Play, CheckCircle2, Circle
 } from 'lucide-react';
 
 interface SyllabusViewProps {
     syllabus: Syllabus;
-    repoId: string;
     onLessonSelect: (lesson: Lesson) => void;
     completedLessons?: Set<string>;
 }
 
-export function SyllabusView({ syllabus, repoId, onLessonSelect, completedLessons = new Set() }: SyllabusViewProps) {
+export function SyllabusView({ syllabus, onLessonSelect, completedLessons = new Set() }: SyllabusViewProps) {
     const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set([0])); // First module expanded by default
 
     // Calculate progress
@@ -151,13 +150,11 @@ export function SyllabusView({ syllabus, repoId, onLessonSelect, completedLesson
                                             className="overflow-hidden"
                                         >
                                             <div className="ml-14 mt-2 space-y-1">
-                                                {moduleLessons.map((lesson, lIdx) => (
+                                                {moduleLessons.map((lesson) => (
                                                     <LessonRow
                                                         key={lesson.id}
                                                         lesson={lesson}
-                                                        index={lIdx}
                                                         isCompleted={completedLessons.has(lesson.id)}
-                                                        isLast={lIdx === moduleLessons.length - 1}
                                                         onClick={() => onLessonSelect(lesson)}
                                                     />
                                                 ))}
@@ -176,17 +173,12 @@ export function SyllabusView({ syllabus, repoId, onLessonSelect, completedLesson
 
 interface LessonRowProps {
     lesson: Lesson;
-    index: number;
     isCompleted: boolean;
-    isLast: boolean;
     onClick: () => void;
 }
 
-function LessonRow({ lesson, index, isCompleted, isLast, onClick }: LessonRowProps) {
+function LessonRow({ lesson, isCompleted, onClick }: LessonRowProps) {
     const [isHovered, setIsHovered] = useState(false);
-
-    const TypeIcon = lesson.type === 'concept' ? BookOpen :
-        lesson.type === 'code_tour' ? Code : Terminal;
 
     return (
         <motion.button

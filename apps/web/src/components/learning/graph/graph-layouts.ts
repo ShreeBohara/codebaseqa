@@ -1,13 +1,26 @@
 import dagre from 'dagre';
 import { LayoutType } from './GraphToolbar';
 
+// Type definitions for layout functions
+interface LayoutNode {
+    id: string;
+    position: { x: number; y: number };
+    [key: string]: unknown;
+}
+
+interface LayoutEdge {
+    source: string;
+    target: string;
+    [key: string]: unknown;
+}
+
 const nodeWidth = 200;
 const nodeHeight = 70;
 
 /**
  * Apply horizontal hierarchy layout using dagre (left-to-right)
  */
-export function applyHierarchyLayout(nodes: any[], edges: any[]) {
+export function applyHierarchyLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: 'LR', nodesep: 80, ranksep: 120 });
@@ -39,7 +52,7 @@ export function applyHierarchyLayout(nodes: any[], edges: any[]) {
 /**
  * Apply vertical tree layout using dagre (top-to-bottom)
  */
-export function applyVerticalLayout(nodes: any[], edges: any[]) {
+export function applyVerticalLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 100 });
@@ -71,7 +84,7 @@ export function applyVerticalLayout(nodes: any[], edges: any[]) {
 /**
  * Apply radial layout - nodes arranged in circles around a center
  */
-export function applyRadialLayout(nodes: any[], edges: any[]) {
+export function applyRadialLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
     if (nodes.length === 0) return nodes;
 
     // Find the root node (node with most outgoing edges or first node)
@@ -175,7 +188,7 @@ export function applyRadialLayout(nodes: any[], edges: any[]) {
 /**
  * Apply the specified layout to nodes
  */
-export function applyLayout(nodes: any[], edges: any[], layout: LayoutType) {
+export function applyLayout(nodes: LayoutNode[], edges: LayoutEdge[], layout: LayoutType) {
     switch (layout) {
         case 'radial':
             return applyRadialLayout(nodes, edges);

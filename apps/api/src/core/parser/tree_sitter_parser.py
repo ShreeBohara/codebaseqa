@@ -3,13 +3,15 @@ Tree-sitter based code parser for Python, JavaScript, and TypeScript.
 Extracts semantic chunks (functions, classes, methods) for embedding.
 """
 
-import tree_sitter_python as tspython
-import tree_sitter_javascript as tsjavascript
-import tree_sitter_typescript as tstypescript
-from tree_sitter import Language, Parser, Node
-from typing import List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
+from typing import List, Optional
+
+import tree_sitter_javascript as tsjavascript
+import tree_sitter_python as tspython
+import tree_sitter_typescript as tstypescript
+from tree_sitter import Language, Node, Parser
 
 
 class ChunkType(str, Enum):
@@ -200,7 +202,6 @@ class TreeSitterParser:
     def _get_text(self, node: Node, content: str) -> str:
         return content[node.start_byte:node.end_byte]
 
-from functools import lru_cache
 
 @lru_cache(maxsize=10)
 def _get_cached_parser(language: str) -> TreeSitterParser:

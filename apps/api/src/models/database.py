@@ -3,15 +3,23 @@ Database models for CodebaseQA.
 Designed for future extensibility (multi-user, teams, etc.)
 """
 
-from datetime import datetime
-from typing import Optional, List
-from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, DateTime,
-    ForeignKey, Text, JSON, Index, Enum as SQLEnum
-)
-from sqlalchemy.orm import relationship, declarative_base
-import uuid
 import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
