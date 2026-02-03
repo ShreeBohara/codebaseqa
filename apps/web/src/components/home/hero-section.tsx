@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Github, Sparkles, Network, Briefcase, GraduationCap } from 'lucide-react';
+import { ArrowRight, Github, Sparkles, Network } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 const ROLES = [
@@ -66,7 +66,7 @@ export function HeroSection() {
                             <ArrowRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
                         </Link>
                         <a
-                            href="https://github.com"
+                            href="https://github.com/ShreeBohara/codebaseqa"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white px-8 py-4 rounded-2xl font-medium transition-all md:text-lg"
@@ -76,28 +76,28 @@ export function HeroSection() {
                         </a>
                     </div>
 
-                    {/* Stats / Trust Badges */}
+                    {/* Trust Badges */}
                     <div className="mt-16 pt-8 border-t border-white/5 grid grid-cols-3 gap-4 max-w-2xl mx-auto">
                         <div className="text-center">
                             <div className="flex items-center justify-center gap-2 text-indigo-400 mb-1">
-                                <Network size={20} />
-                                <span className="font-bold text-xl">100+</span>
+                                <Github size={20} />
+                                <span className="font-bold text-xl">100%</span>
                             </div>
-                            <div className="text-sm text-zinc-500">Live Visualizations</div>
+                            <div className="text-sm text-zinc-500">Open Source</div>
                         </div>
                         <div className="text-center border-l border-white/5 border-r">
                             <div className="flex items-center justify-center gap-2 text-purple-400 mb-1">
-                                <GraduationCap size={20} />
-                                <span className="font-bold text-xl">5k+</span>
+                                <Network size={20} />
+                                <span className="font-bold text-xl">Local</span>
                             </div>
-                            <div className="text-sm text-zinc-500">Lessons Generated</div>
+                            <div className="text-sm text-zinc-500">Self-Hosted</div>
                         </div>
                         <div className="text-center">
                             <div className="flex items-center justify-center gap-2 text-emerald-400 mb-1">
-                                <Briefcase size={20} />
-                                <span className="font-bold text-xl">Zero</span>
+                                <Sparkles size={20} />
+                                <span className="font-bold text-xl">BYOK</span>
                             </div>
-                            <div className="text-sm text-zinc-500">Setup Time</div>
+                            <div className="text-sm text-zinc-500">Your API Keys</div>
                         </div>
                     </div>
                 </motion.div>

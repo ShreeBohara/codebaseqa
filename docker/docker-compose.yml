@@ -25,6 +25,7 @@ services:
       - DATABASE_URL=sqlite:///./data/codebaseqa.db
       - CHROMA_PERSIST_DIRECTORY=./data/chroma
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SEED_DEMO=${SEED_DEMO:-false}
     restart: always
 
 volumes:

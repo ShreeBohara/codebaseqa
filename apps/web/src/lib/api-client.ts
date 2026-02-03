@@ -245,6 +245,14 @@ class ApiClient {
     if (!res.ok) throw new Error(await res.text());
   }
 
+  async seedDemo(): Promise<{ status: string; repo_id: string; message: string }> {
+    const res = await fetch(`${this.baseUrl}/api/repos/demo/seed`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
   // Chat endpoints
   async createSession(repoId: string): Promise<{ id: string }> {
     const res = await fetch(`${this.baseUrl}/api/chat/sessions`, {

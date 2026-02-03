@@ -206,3 +206,51 @@ async def get_repo_file_content(
     except Exception as e:
         logger.error(f"Failed to read file: {e}")
         raise HTTPException(status_code=500, detail="Failed to read file content")
+
+
+@router.post("/demo/seed")
+async def seed_demo_repository(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Seed a demo repository for immediate exploration.
+    Returns the demo repo if it exists, or creates and indexes it.
+    """
+    from src.demo.seed_demo import DEMO_REPO
+
+    # Check if already exists
+    existing = db.query(Repository).filter(
+        Repository.github_owner == DEMO_REPO["owner"],
+        Repository.github_name == DEMO_REPO["name"]
+    ).first()
+
+    if existing:
+        if existing.status == IndexingStatus.COMPLETED:
+            return {"status": "ready", "repo_id": existing.id, "message": "Demo repository ready"}
+        elif existing.status == IndexingStatus.FAILED:
+            # Re-trigger indexing
+            existing.status = IndexingStatus.PENDING
+            existing.indexing_error = None
+            db.commit()
+            background_tasks.add_task(run_indexing_task, existing.id)
+            return {"status": "indexing", "repo_id": existing.id, "message": "Re-indexing demo repository"}
+        else:
+            return {"status": existing.status, "repo_id": existing.id, "message": f"Demo repository {existing.status}"}
+
+    # Create new demo repo
+    repo = Repository(
+        github_url=DEMO_REPO["github_url"],
+        github_owner=DEMO_REPO["owner"],
+        github_name=DEMO_REPO["name"],
+        description=DEMO_REPO["description"],
+        status=IndexingStatus.PENDING,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    # Start indexing in background
+    background_tasks.add_task(run_indexing_task, repo.id)
+
+    return {"status": "indexing", "repo_id": repo.id, "message": "Demo repository created and indexing started"}
