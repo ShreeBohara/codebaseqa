@@ -24,3 +24,33 @@ def mock_repo_data():
         "name": "fastapi",
         "id": "test-repo-id"
     }
+
+@pytest.fixture
+def sample_python_code():
+    return """
+import os
+import sys
+
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+
+class Calculator:
+    def add(self, a, b):
+        return a + b
+"""
+
+@pytest.fixture
+def sample_javascript_code():
+    return """
+function formatName(firstName, lastName) {
+    return firstName + " " + lastName;
+}
+
+class User {
+    constructor(name) {
+        this.name = name;
+    }
+}
+"""

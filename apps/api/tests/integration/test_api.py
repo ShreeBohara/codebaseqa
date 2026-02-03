@@ -55,7 +55,8 @@ def test_create_repo(client):
             setattr(x, 'created_at', datetime.datetime.now())
             setattr(x, 'total_files', 0)
             setattr(x, 'total_chunks', 0)
-            setattr(x, 'languages', [])
+            setattr(x, 'languages', [])  # Ensure this is a list
+            setattr(x, 'status', "pending")
             
         mock_db.refresh.side_effect = refresh_side_effect
         
