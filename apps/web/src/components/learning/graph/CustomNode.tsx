@@ -135,7 +135,8 @@ function getImportanceSizeMultiplier(importance?: number): number {
 // Custom Node Component
 function CustomNodeComponent({ data, selected }: { data: CustomNodeData; selected?: boolean }) {
     const fileType = data.fileType || detectFileType(data.filePath || data.label);
-    const config = FILE_TYPES[fileType];
+    // Fallback to 'default' if the fileType doesn't exist in FILE_TYPES
+    const config = FILE_TYPES[fileType as keyof typeof FILE_TYPES] || FILE_TYPES.default;
     const Icon = config.icon;
     const sizeMultiplier = getImportanceSizeMultiplier(data.importance);
 

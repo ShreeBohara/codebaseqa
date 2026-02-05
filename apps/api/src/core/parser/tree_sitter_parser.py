@@ -11,6 +11,7 @@ from typing import List, Optional
 import tree_sitter_javascript as tsjavascript
 import tree_sitter_python as tspython
 import tree_sitter_typescript as tstypescript
+import tree_sitter_java as tsjava
 from tree_sitter import Language, Node, Parser
 
 
@@ -66,9 +67,16 @@ class TreeSitterParser:
         "typescript": {
             "extensions": [".ts", ".tsx"],
             "language": Language(tstypescript.language_typescript()),
-            "function_types": ["function_declaration", "arrow_function"],
-            "class_types": ["class_declaration"],
-            "import_types": ["import_statement"],
+            "function_types": ["function_declaration", "method_definition", "arrow_function"],
+            "class_types": ["class_declaration", "interface_declaration", "enum_declaration"],
+            "import_types": ["import_declaration", "import_statement"],
+        },
+        "java": {
+            "extensions": [".java"],
+            "language": Language(tsjava.language()),
+            "function_types": ["method_declaration", "constructor_declaration"],
+            "class_types": ["class_declaration", "interface_declaration", "enum_declaration"],
+            "import_types": ["import_declaration"],
         },
     }
 

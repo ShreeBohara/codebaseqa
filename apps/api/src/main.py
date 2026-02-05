@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from src.api.routes import chat, learning, repos, search
 from src.config import settings
@@ -85,34 +86,97 @@ app.include_router(learning.router, prefix="/api/learning", tags=["learning"])
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for container orchestration."""
-    from src.dependencies import get_db_engine
-
-    checks = {"database": "ok", "vector_store": "ok"}
-
+    """Comprehensive health check endpoint."""
+    from src.dependencies import get_db_engine, get_vector_store, get_llm_service
+    from src.config import settings
+    import httpx
+    
+    checks = {
+        "database": "ok",
+        "vector_store": "ok",
+        "llm_provider": "ok",
+        "github_api": "ok"
+    }
+    
     # Check database
     try:
         engine = get_db_engine()
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
     except Exception as e:
         checks["database"] = f"error: {str(e)[:50]}"
-
+    
     # Check vector store
     try:
         vs = get_vector_store()
-        if vs._client is None:
-            checks["vector_store"] = "not initialized"
+        # Just check if initialized since connection might be lazy
+        if not vs:
+             checks["vector_store"] = "not initialized"
     except Exception as e:
         checks["vector_store"] = f"error: {str(e)[:50]}"
-
-    all_ok = all(v == "ok" for v in checks.values())
-
+    
+    # Check LLM provider
+    try:
+        llm = get_llm_service()
+        if hasattr(llm, 'health_check'):
+            is_healthy = await llm.health_check()
+            checks["llm_provider"] = "ok" if is_healthy else "unavailable/unreachable"
+    except Exception as e:
+        checks["llm_provider"] = f"error: {str(e)[:50]}"
+    
+    # Check GitHub API rate limit
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            headers = {}
+            if settings.github_token:
+                headers["Authorization"] = f"token {settings.github_token}"
+            response = await client.get(
+                "https://api.github.com/rate_limit",
+                headers=headers
+            )
+            if response.status_code == 200:
+                data = response.json()
+                remaining = data["resources"]["core"]["remaining"]
+                limit = data["resources"]["core"]["limit"]
+                checks["github_api"] = f"ok ({remaining}/{limit} remaining)"
+            else:
+                checks["github_api"] = f"error: status {response.status_code}"
+    except Exception as e:
+        checks["github_api"] = f"error: {str(e)[:50]}"
+    
+    all_ok = all("ok" in str(v) for v in checks.values())
+    
     return {
         "status": "healthy" if all_ok else "degraded",
-        "version": "0.1.0",
+        "version": "0.2.0",
+        "llm_provider": settings.llm_provider,
+        "embedding_provider": settings.embedding_provider,
         "checks": checks
     }
+
+
+@app.get("/openapi.json")
+async def get_openapi_schema():
+    """Download OpenAPI schema as JSON file."""
+    return app.openapi()
+
+
+@app.get("/openapi.yaml")
+async def get_openapi_yaml():
+    """Download OpenAPI schema as YAML."""
+    import yaml
+    from fastapi.responses import Response
+    schema = app.openapi()
+    yaml_content = yaml.dump(schema, default_flow_style=False)
+    return Response(content=yaml_content, media_type="text/yaml")
+
+
+@app.get("/api/cache/stats")
+async def get_cache_stats():
+    """Get LLM cache statistics."""
+    from src.core.cache.llm_cache import get_llm_cache
+    cache = get_llm_cache()
+    return cache.stats()
 
 
 # Global exception handler
@@ -127,8 +191,12 @@ async def global_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+    # Setup logging before run
+    from src.core.logging import setup_logging
+    setup_logging()
+    
     uvicorn.run(
-        "main:app",
+        "src.main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.debug

@@ -34,11 +34,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Demo repository - small, well-documented, popular
+# Using tiangolo/sqlmodel - small, modern, well-documented (~50 files)
 DEMO_REPO = {
-    "github_url": "https://github.com/httpie/cli",
-    "owner": "httpie",
-    "name": "cli",
-    "description": "HTTPie CLI - modern, user-friendly HTTP client",
+    "github_url": "https://github.com/tiangolo/sqlmodel",
+    "owner": "tiangolo",
+    "name": "sqlmodel",
+    "branch": "main",
+    "description": "SQLModel - SQL databases in Python with type hints",
 }
 
 
@@ -64,6 +66,7 @@ def create_demo_repo(db) -> Repository:
         github_url=DEMO_REPO["github_url"],
         github_owner=DEMO_REPO["owner"],
         github_name=DEMO_REPO["name"],
+        default_branch=DEMO_REPO.get("branch", "main"),
         description=DEMO_REPO["description"],
         status=IndexingStatus.PENDING,
     )

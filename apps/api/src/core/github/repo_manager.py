@@ -35,12 +35,43 @@ class RepoManager:
         """Get local path for a repository."""
         return self._repos_dir / owner / name
 
+    async def get_default_branch(self, github_url: str) -> str:
+        """Get the default branch of a repository using git ls-remote."""
+        url = github_url
+        if settings.github_token and "github.com" in github_url:
+            url = github_url.replace(
+                "https://github.com",
+                f"https://{settings.github_token}@github.com"
+            )
+
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "--symref", url, "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode == 0:
+                # Parse output like: ref: refs/heads/master  HEAD
+                for line in result.stdout.splitlines():
+                    if line.startswith("ref:") and "HEAD" in line:
+                        # Extract branch name from refs/heads/branch_name
+                        ref_part = line.split()[1]
+                        if ref_part.startswith("refs/heads/"):
+                            return ref_part.replace("refs/heads/", "")
+        except Exception as e:
+            logger.warning(f"Failed to detect default branch: {e}")
+
+        # Fallback to main
+        return "main"
+
     async def clone_repository(
         self,
         github_url: str,
         owner: str,
         name: str,
-        branch: str = "main"
+        branch: str = None
     ) -> Path:
         """Clone a repository with shallow clone for speed."""
         local_path = self.get_local_path(owner, name)
@@ -50,6 +81,11 @@ class RepoManager:
             shutil.rmtree(local_path)
 
         local_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Auto-detect default branch if not specified
+        if not branch:
+            branch = await self.get_default_branch(github_url)
+            logger.info(f"Detected default branch: {branch}")
 
         # Build clone command
         cmd = [

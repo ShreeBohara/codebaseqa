@@ -77,12 +77,18 @@ async def create_repository(
             detail=f"Repository already exists with status: {existing.status}"
         )
 
+    # Auto-detect default branch if not specified
+    branch = repo.branch
+    if not branch:
+        branch = await repo_manager.get_default_branch(str(repo.github_url))
+        logger.info(f"Auto-detected default branch: {branch}")
+
     # Create new repository record
     db_repo = Repository(
         github_url=str(repo.github_url),
         github_owner=owner,
         github_name=name,
-        default_branch=repo.branch or "main",
+        default_branch=branch,
         status=IndexingStatus.PENDING,
     )
     db.add(db_repo)
@@ -243,6 +249,7 @@ async def seed_demo_repository(
         github_url=DEMO_REPO["github_url"],
         github_owner=DEMO_REPO["owner"],
         github_name=DEMO_REPO["name"],
+        default_branch=DEMO_REPO.get("branch", "main"),
         description=DEMO_REPO["description"],
         status=IndexingStatus.PENDING,
     )

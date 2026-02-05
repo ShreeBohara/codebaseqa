@@ -7,13 +7,17 @@ from typing import List
 
 import tiktoken
 from openai import AsyncOpenAI
+from src.core.embeddings.base import BaseEmbeddings
 
 
-class OpenAIEmbeddings:
+class OpenAIEmbeddings(BaseEmbeddings):
     """OpenAI embedding service."""
 
-    def __init__(self, api_key: str = None, model: str = "text-embedding-3-small"):
-        self._client = AsyncOpenAI(api_key=api_key)
+    def __init__(self, api_key: str = None, model: str = "text-embedding-3-small", base_url: str | None = None):
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self._client = AsyncOpenAI(**client_kwargs)
         self._model = model
         self._dimensions = 1536
         self._max_tokens = 8000  # Leave some buffer from 8192 limit
@@ -35,15 +39,36 @@ class OpenAIEmbeddings:
         return text
 
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """Embed multiple texts."""
+        """Embed multiple texts with token-aware batching."""
         all_embeddings = []
-        batch_size = 500  # Increased from 100 - OpenAI supports up to 2048
+        max_tokens_per_request = 250000  # Leave buffer from 300k limit
 
-        # Truncate texts to fit within token limit
+        # Truncate texts to fit within per-text token limit
         truncated_texts = [self._truncate_text(t) for t in texts]
 
-        for i in range(0, len(truncated_texts), batch_size):
-            batch = truncated_texts[i:i + batch_size]
+        # Create token-aware batches
+        batches = []
+        current_batch = []
+        current_tokens = 0
+
+        for text in truncated_texts:
+            text_tokens = len(self._tokenizer.encode(text))
+
+            # If adding this text would exceed limit, start new batch
+            if current_tokens + text_tokens > max_tokens_per_request and current_batch:
+                batches.append(current_batch)
+                current_batch = []
+                current_tokens = 0
+
+            current_batch.append(text)
+            current_tokens += text_tokens
+
+        # Don't forget the last batch
+        if current_batch:
+            batches.append(current_batch)
+
+        # Process each batch
+        for batch in batches:
             response = await self._client.embeddings.create(model=self._model, input=batch)
             all_embeddings.extend([item.embedding for item in response.data])
 
@@ -54,4 +79,3 @@ class OpenAIEmbeddings:
         truncated = self._truncate_text(query)
         response = await self._client.embeddings.create(model=self._model, input=truncated)
         return response.data[0].embedding
-

@@ -68,24 +68,17 @@ def get_vector_store():
 @lru_cache()
 def get_embedding_service():
     """Get embedding service based on configuration."""
-    from src.core.embeddings.openai_embeddings import OpenAIEmbeddings
+    from src.core.embeddings.factory import create_embedding_service
 
-    return OpenAIEmbeddings(
-        api_key=settings.openai_api_key,
-        model=settings.openai_embedding_model,
-    )
+    return create_embedding_service()
 
 
 # LLM Service
 @lru_cache()
 def get_llm_service():
     """Get LLM service based on configuration."""
-    from src.core.llm.openai_llm import OpenAILLM
-
-    return OpenAILLM(
-        api_key=settings.openai_api_key,
-        model=settings.openai_model,
-    )
+    from src.core.llm.factory import create_llm
+    return create_llm()
 
 
 def get_learning_service(

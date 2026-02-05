@@ -204,6 +204,36 @@ codebaseqa export-tour <repo-id> <lesson-id>
 
 ---
 
+## Limitations & Recommended Repos
+
+### Current Limitations
+
+This project is optimized for **small to medium repositories** (under 500 files). Large repos like React, Next.js, or FastAPI may:
+- Take a long time to index
+- Hit OpenAI API token limits
+- Use significant API credits
+
+### Recommended Test Repositories
+
+| Repository | Files | Description |
+|------------|-------|-------------|
+| `tiangolo/sqlmodel` | ~50 | SQL + Pydantic models |
+| `pallets/click` | ~40 | CLI framework |
+| `encode/starlette` | ~80 | ASGI framework |
+| `psf/requests` | ~60 | HTTP library |
+| `expressjs/express` | ~100 | Node.js web framework |
+
+### Future Improvements
+
+- [ ] **Smart file filtering** - Skip tests, docs, and examples
+- [ ] **Subdirectory indexing** - Only index `src/` or specific folders
+- [ ] **Incremental indexing** - Only re-index changed files
+- [ ] **File prioritization** - Focus on entry points and core modules
+- [ ] **Streaming embeddings** - Process in smaller batches for large repos
+- [ ] **Multiple LLM providers** - Support Anthropic, local models (Ollama)
+
+---
+
 ## Author
 
 **Shree Bohara**

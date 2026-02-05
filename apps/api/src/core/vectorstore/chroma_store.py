@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 import chromadb
+import chromadb.errors
 from chromadb.config import Settings
 
 
@@ -58,8 +59,8 @@ class ChromaStore:
                 self._executor,
                 lambda: self._client.delete_collection(name)
             )
-        except ValueError:
-            pass  # Collection doesn't exist
+        except (ValueError, chromadb.errors.NotFoundError):
+            pass  # Collection doesn't exist, that's fine
 
     async def add_documents(
         self,
