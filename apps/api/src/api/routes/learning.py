@@ -141,6 +141,19 @@ async def get_achievements(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{repo_id}/progress")
+async def get_lesson_progress(
+    repo_id: str,
+    service: GamificationService = Depends(get_gamification_service)
+):
+    """Get list of completed lesson IDs."""
+    try:
+        completed = service.get_completed_lessons(repo_id)
+        return {"completed_lessons": completed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class CompleteLessonRequest(BaseModel):
     time_spent_seconds: int = 0
 

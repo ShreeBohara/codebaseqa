@@ -266,12 +266,23 @@ export function GraphView({ repoId }: GraphViewProps) {
                         )}
                     </div>
 
-                    {/* Stats Badge */}
+                    {/* Stats Badge with Density Indicator */}
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/90 backdrop-blur-sm border border-zinc-800 rounded-lg">
                         <Sparkles size={12} className="text-indigo-400" />
                         <span className="text-xs text-zinc-400">
                             {nodes.length} nodes • {edges.length} connections
                         </span>
+                        {nodes.length > 0 && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                edges.length / nodes.length >= 1.5 
+                                    ? 'bg-emerald-500/20 text-emerald-400' 
+                                    : edges.length / nodes.length >= 1.0
+                                        ? 'bg-amber-500/20 text-amber-400'
+                                        : 'bg-red-500/20 text-red-400'
+                            }`}>
+                                {(edges.length / nodes.length).toFixed(1)} e/n
+                            </span>
+                        )}
                     </div>
 
                     {/* Regenerate Button */}

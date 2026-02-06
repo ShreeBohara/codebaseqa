@@ -163,50 +163,70 @@ Return clean JSON matching this structure:
     async def generate_lesson(self, repo_id: str, lesson_id: str, lesson_title: str) -> Optional[LessonContent]:
         """Generate detailed content for a specific lesson."""
         from src.models.learning import CodeReference
+        from pathlib import Path
+
+        # Code file extensions to include (exclude .md, .txt, etc.)
+        CODE_EXTENSIONS = {
+            '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go', '.java', '.c', '.cpp',
+            '.h', '.hpp', '.cs', '.rb', '.php', '.swift', '.kt', '.scala', '.vue',
+            '.svelte', '.astro', '.yaml', '.yml', '.json', '.toml', '.sql'
+        }
 
         # 1. Gather Context
         context_docs = await self._vector_store.search(
             collection_name=repo_id,
             query_embedding=await self._vector_store._embedding_service.embed_query(lesson_title),
-            limit=10
+            limit=15  # Increased for better context
         )
 
-        # Extract actual file paths from metadata
+        # Extract actual file paths from metadata - filter to code files only
         available_files = set()
         for d in context_docs:
             file_path = d.metadata.get("file_path")
             if file_path:
-                available_files.add(file_path)
+                ext = Path(file_path).suffix.lower()
+                if ext in CODE_EXTENSIONS:
+                    available_files.add(file_path)
 
-        files_list = "\n".join(sorted(available_files)) if available_files else "No files indexed."
-        context_str = "\n".join([d.content[:1500] for d in context_docs])
+        files_list = "\n".join(sorted(available_files)) if available_files else "No code files indexed."
+        context_str = "\n\n---\n\n".join([f"File: {d.metadata.get('file_path', 'unknown')}\n{d.content[:2000]}" for d in context_docs])
 
-        # 2. Build Prompt with explicit file list
-        prompt = f"""
-You are an expert technical instructor. Create a lesson titled "{lesson_title}" for this codebase.
-Use the provided code context to explain the concepts and point to specific files.
-Crucially, include a "Code Tour" where you reference specific files and line numbers (approximate lines are fine).
+        # 2. Build Enhanced Prompt with structure requirements
+        prompt = f"""You are an expert technical instructor creating an in-depth lesson titled "{lesson_title}" for this codebase.
 
-**CRITICAL**: You MUST ONLY use file paths from the "Available Files" list below. Do NOT invent or guess file paths.
+## Requirements:
+1. **Opening Hook** (2-3 sentences): Why this topic matters, real-world relevance
+2. **Learning Objectives**: 3-5 bullet points of what the student will understand
+3. **Core Concepts**: 3-5 detailed sections explaining the topic with specific code references
+4. **How It Works Here**: Explain how this concept is implemented in THIS specific codebase
+5. **Common Pitfalls**: 2-3 mistakes to avoid when working with this code
+6. **Summary**: Key takeaways in a concise list
 
-Available Files:
+## Style Guidelines:
+- Be specific to THIS codebase, avoid generic explanations
+- Minimum 600 words of content
+- Use markdown formatting (headers, bold, lists)
+- Reference specific files and explain WHY they matter
+- Do NOT include code blocks in content_markdown - use code_references instead
+
+## Available Code Files (use ONLY these for code_references):
 {files_list}
 
-Context:
+## Codebase Context:
 {context_str}
 
 Return clean JSON:
 {{
-  "content_markdown": "Full explanation in markdown. Use bolding and lists. Do NOT include code blocks here, point to the code references instead.",
+  "content_markdown": "Rich, structured lesson content following the requirements above (min 600 words)",
   "code_references": [
     {{
-      "file_path": "MUST be from Available Files list above",
+      "file_path": "MUST be from Available Code Files list",
       "start_line": 1,
-      "end_line": 20,
-      "description": "Explanation of what to look for here"
+      "end_line": 30,
+      "description": "What to look for and WHY it's important"
     }}
   ],
-  "diagram_mermaid": "graph TD; A-->B; (Optional mermaid diagram source)"
+  "diagram_mermaid": "graph TD; A-->B; (Optional architecture/flow diagram)"
 }}
 """
 
@@ -222,13 +242,20 @@ Return clean JSON:
             cleaned = response.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
 
-            # Post-process code references to try and verify lines (optional, skipped for speed)
+            # Post-process code references - filter to code files only
+            raw_refs = data.get("code_references", [])
+            filtered_refs = []
+            for r in raw_refs:
+                file_path = r.get("file_path", "")
+                ext = Path(file_path).suffix.lower() if file_path else ""
+                if ext in CODE_EXTENSIONS:
+                    filtered_refs.append(CodeReference(**r))
 
             return LessonContent(
                 id=lesson_id,
                 title=lesson_title,
                 content_markdown=data.get("content_markdown", "No content generated."),
-                code_references=[CodeReference(**r) for r in data.get("code_references", [])],
+                code_references=filtered_refs,
                 diagram_mermaid=data.get("diagram_mermaid")
             )
         except Exception as e:
@@ -365,25 +392,26 @@ Return clean JSON:
         context_str = "\n\n".join(summaries)
 
         # ========== ENHANCED LLM PROMPT ==========
-        prompt = f"""You are an expert software architect. Analyze the codebase files below and generate a COMPREHENSIVE dependency graph.
+        prompt = f"""You are an expert software architect. Analyze the codebase files below and generate a WELL-CONNECTED dependency graph.
 
-**INSTRUCTIONS**:
-1. Include 10-20 nodes representing significant files (not just entry points)
-2. Use ONLY file paths from the "Available Files" list as node IDs
-3. Group nodes by their folder/feature (e.g., "components", "pages", "api", "utils", "store")
-4. Identify MULTIPLE relationship types between files:
-   - "imports" = direct import statement
-   - "uses" = uses functionality from another file
-   - "extends" = class extension or interface implementation
-   - "calls" = function call relationship
-   - "configures" = configuration dependency
-5. Rate each node's importance (1-10) based on how central it is:
-   - 10 = core entry point, used by everything
-   - 7-9 = major component, many dependencies
-   - 4-6 = regular file with some connections
-   - 1-3 = leaf file, minimal connections
-6. Estimate lines of code (LOC) for each file (50-500 range)
-7. List key exports (functions, classes, components) for each file (max 3 items)
+**CRITICAL RULES**:
+- EVERY node must have AT LEAST 2 edges (connections)
+- NEVER include isolated/orphan files with no connections
+- Focus on files that import OR are imported by others
+- Target 15-30 edges total, minimum 10 nodes
+
+**RELATIONSHIP TYPES** (use multiple per node):
+- "imports" = direct import/require statement
+- "uses" = uses functionality, calls functions
+- "extends" = class/interface extension
+- "configures" = provides config/context to
+
+**NODE SELECTION PRIORITY**:
+1. Entry points (index, app, main, layout)  
+2. Shared components used by multiple files
+3. Utility/helper files imported by many
+4. API routes and data layers
+5. Config files that affect many modules
 
 Available Files:
 {files_list}
@@ -398,25 +426,22 @@ Return ONLY valid JSON in this exact format:
       "id": "exact/path/from/list.tsx",
       "label": "filename.tsx",
       "type": "component|page|store|api|util|schema|config",
-      "description": "Brief description of what this file does",
+      "description": "What this file does",
       "group": "folder-name",
-      "importance": 8,
-      "loc": 150,
-      "exports": ["ComponentName", "useHook", "helperFn"]
+      "importance": 8
     }}
   ],
   "edges": [
     {{
       "source": "path/to/source.tsx",
       "target": "path/to/target.tsx",
-      "label": "imports Button component",
-      "type": "imports",
-      "weight": 3
+      "label": "imports X",
+      "type": "imports"
     }}
   ]
 }}
 
-Generate a DENSE but compact graph. Aim for 10-25 edges."""
+REMEMBER: Dense, connected graph. No orphan nodes. At least 15 edges."""
 
         messages = [
             {"role": "system", "content": "You are an expert codebase dependency analyzer. Output ONLY valid JSON. Be thorough and include all significant files."},
@@ -503,7 +528,13 @@ Generate a DENSE but compact graph. Aim for 10-25 edges."""
         all_paths = {f.path for f in self._db.query(CodeFile).filter(CodeFile.repository_id == repo.id).all()}
         valid_nodes = [n for n in nodes if n.id in all_paths]
         if len(valid_nodes) < 2:
-            nodes = self._build_nodes_from_repo(repo, all_paths, limit=settings.graph_max_files)
+            nodes = self._build_nodes_from_repo(repo, all_paths, limit=settings.graph_max_files, code_only=True)
+            node_ids = {n.id for n in nodes}
+            edges = []
+
+        # If model produced sparse/no edges, switch to deterministic code-focused nodes
+        if len(edges) < settings.graph_min_edges:
+            nodes = self._build_nodes_from_repo(repo, all_paths, limit=settings.graph_max_files, code_only=True)
             node_ids = {n.id for n in nodes}
             edges = []
 
@@ -517,7 +548,7 @@ Generate a DENSE but compact graph. Aim for 10-25 edges."""
             static_edges, extra_nodes = self._build_edges_from_imports(
                 repo,
                 [n.id for n in nodes],
-                max_new_nodes=10,
+                max_new_nodes=20,  # Increased for better coverage
             )
             if static_edges:
                 # Merge edges without duplicates
@@ -538,8 +569,32 @@ Generate a DENSE but compact graph. Aim for 10-25 edges."""
                             description="Imported module",
                         ))
 
+        # Filter out orphan nodes (nodes with no connections)
+        if not settings.graph_include_orphans:
+            nodes, edges = self._filter_connected_nodes(nodes, edges)
+
         logger.info(f"Generated graph with {len(nodes)} nodes and {len(edges)} edges")
         return DependencyGraph(nodes=nodes, edges=edges)
+
+    def _filter_connected_nodes(
+        self,
+        nodes: List[GraphNode],
+        edges: List[GraphEdge]
+    ) -> tuple[List[GraphNode], List[GraphEdge]]:
+        """Remove nodes that have no edges (orphans)."""
+        connected_ids = set()
+        for e in edges:
+            connected_ids.add(e.source)
+            connected_ids.add(e.target)
+        
+        filtered_nodes = [n for n in nodes if n.id in connected_ids]
+        
+        # Log if we filtered any
+        removed = len(nodes) - len(filtered_nodes)
+        if removed > 0:
+            logger.info(f"Filtered out {removed} orphan nodes")
+        
+        return filtered_nodes, edges
 
     async def _generate_edges_only(self, nodes: List[GraphNode], summary_map: dict) -> List[GraphEdge]:
         node_ids = [n.id for n in nodes if n.id]
@@ -637,12 +692,30 @@ Aim for 10-25 edges.
         )
         return single_quoted
 
+    # Comprehensive import patterns for JS/TS/Python
+    IMPORT_PATTERNS = [
+        # ESM static imports: import X from "Y", import "Y", import { X } from "Y"
+        r'import\s+(?:[^;]*?\s+from\s+)?["\']([^"\']+)["\']',
+        # CommonJS require: require("Y"), require('Y')
+        r'require\s*\(\s*["\']([^"\']+)["\']\s*\)',
+        # Dynamic imports: import("Y"), import('Y')
+        r'import\s*\(\s*["\']([^"\']+)["\']\s*\)',
+        # Re-exports: export * from "Y", export { X } from "Y"
+        r'export\s+\*\s+from\s+["\']([^"\']+)["\']',
+        r'export\s+\{[^}]*\}\s+from\s+["\']([^"\']+)["\']',
+        # Python: from X import Y
+        r'^from\s+(\S+)\s+import',
+        # Python: import X
+        r'^import\s+([a-zA-Z_][a-zA-Z0-9_.]*)',
+    ]
+
     def _build_edges_from_imports(
         self,
         repo: Repository,
         node_ids: List[str],
-        max_new_nodes: int = 10,
+        max_new_nodes: int = 15,
     ) -> tuple[List[GraphEdge], List[str]]:
+        """Build edges by parsing actual import statements from source files."""
         repo_root = Path(repo.local_path)
         if not repo_root.exists():
             return [], []
@@ -663,14 +736,22 @@ Aim for 10-25 edges.
             except Exception:
                 continue
 
+            # Collect all imports using comprehensive patterns
             modules = set()
-            modules.update(re.findall(r"import\\s+(?:[^;]*?\\s+from\\s+)?[\\\"']([^\\\"']+)[\\\"']", content))
-            modules.update(re.findall(r"require\\(\\s*[\\\"']([^\\\"']+)[\\\"']\\s*\\)", content))
+            for pattern in self.IMPORT_PATTERNS:
+                matches = re.findall(pattern, content, re.MULTILINE)
+                modules.update(matches)
 
             for mod in modules:
-                if not mod.startswith("."):
+                # Skip node_modules and external packages
+                if mod.startswith(("node_modules", "http", "https")) or not mod:
                     continue
-                resolved = self._resolve_module_path(source, mod, all_paths)
+                # Skip bare package names (no path separator and no relative marker)
+                if "/" not in mod and not mod.startswith(".") and "@" not in mod:
+                    # Could be external package like "react", "lodash"
+                    continue
+
+                resolved = self._resolve_module_path(source, mod, all_paths, repo_root)
                 if not resolved:
                     continue
 
@@ -685,7 +766,7 @@ Aim for 10-25 edges.
                         edges.append(GraphEdge(
                             source=source,
                             target=resolved,
-                            label=f"imports {mod}",
+                            label=f"imports {Path(mod).name or mod}",
                             type="imports",
                             weight=1,
                         ))
@@ -698,20 +779,29 @@ Aim for 10-25 edges.
         repo: Repository,
         all_paths: set,
         limit: int = 50,
+        code_only: bool = True,
     ) -> List[GraphNode]:
         # Prefer JS/TS files and common entrypoints
+        code_exts = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
         preferred = []
         others = []
         for f in self._db.query(CodeFile).filter(CodeFile.repository_id == repo.id).all():
             if f.path not in all_paths:
                 continue
             path = f.path
+            ext = Path(path).suffix.lower()
+            if code_only and ext not in code_exts:
+                continue
             name = Path(path).name.lower()
             score = f.line_count or 0
             if any(k in name for k in ["index.", "app.", "server.", "main.", "router", "route", "config", "middleware"]):
                 preferred.append((path, f, score + 500))
             else:
                 others.append((path, f, score))
+
+        # Fallback to all files if code-only filter yields nothing
+        if not preferred and not others and code_only:
+            return self._build_nodes_from_repo(repo, all_paths, limit=limit, code_only=False)
 
         # Sort by score (line count + importance)
         ranked = sorted(preferred, key=lambda x: x[2], reverse=True)
@@ -742,25 +832,56 @@ Aim for 10-25 edges.
         if "model" in p or "schema" in p or "types" in p:
             return "schema"
         return "file"
-    def _resolve_module_path(self, source_path: str, module_path: str, all_paths: set) -> Optional[str]:
+    def _resolve_module_path(
+        self,
+        source_path: str,
+        module_path: str,
+        all_paths: set,
+        repo_root: Path,
+    ) -> Optional[str]:
+        """
+        Resolve import/require targets to repo-relative paths that exist in CodeFile list.
+        Handles:
+        - relative imports ("./foo", "../bar")
+        - Next/TS alias "@/" -> repo root
+        - root-relative "/foo/bar" -> repo root
+        - bare paths treated as repo-root relative (best-effort)
+        """
         base_dir = Path(source_path).parent
-        candidate = (base_dir / module_path).as_posix()
 
-        # Direct match (with extension already)
-        if candidate in all_paths:
-            return candidate
+        # Normalize aliases
+        mod = module_path
+        if mod.startswith("@/"):
+            mod = mod[2:]  # drop "@/"
+        elif mod.startswith("/"):
+            mod = mod[1:]
 
-        # Try common extensions
+        candidates = []
+
+        # Relative path from current file
+        if module_path.startswith("."):
+            candidates.append((base_dir / module_path).as_posix())
+        else:
+            # Treat as repo-root relative
+            candidates.append((repo_root / mod).as_posix().replace(repo_root.as_posix() + "/", ""))
+            # Also try as-is for already relative strings
+            candidates.append(mod)
+
         exts = [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json"]
-        for ext in exts:
-            if candidate + ext in all_paths:
-                return candidate + ext
 
-        # Try index files in a directory
-        for ext in exts:
-            idx = (Path(candidate) / f"index{ext}").as_posix()
-            if idx in all_paths:
-                return idx
+        for cand in candidates:
+            # Direct match
+            if cand in all_paths:
+                return cand
+            # Try with extensions
+            for ext in exts:
+                if cand + ext in all_paths:
+                    return cand + ext
+            # Try index files inside folder
+            for ext in exts:
+                idx = (Path(cand) / f"index{ext}").as_posix()
+                if idx in all_paths:
+                    return idx
 
         return None
 

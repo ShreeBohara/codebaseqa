@@ -378,6 +378,13 @@ class ApiClient {
     return res.json();
   }
 
+  async getCompletedLessons(repoId: string): Promise<string[]> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/progress`);
+    if (!res.ok) throw new Error('Failed to fetch lesson progress');
+    const data = await res.json();
+    return data.completed_lessons || [];
+  }
+
   async completeLesson(repoId: string, lessonId: string, timeSpentSeconds: number): Promise<LessonCompleteResponse> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/complete`, {
       method: 'POST',

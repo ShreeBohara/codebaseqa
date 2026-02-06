@@ -74,12 +74,13 @@ class Settings(BaseSettings):
 
     # Graph generation (LLM prompt sizing)
     graph_max_files: int = 50
-    graph_summary_max_chars: int = 200
-    graph_prompt_max_chars: int = 8000
-    graph_max_tokens: int = 800
+    graph_summary_max_chars: int = 300  # Increased for more context
+    graph_prompt_max_chars: int = 10000  # Larger prompt budget
+    graph_max_tokens: int = 1000  # Allow longer LLM response
     graph_llm_timeout_seconds: int = 180
-    graph_min_edges: int = 8
-    graph_edge_max_tokens: int = 400
+    graph_min_edges: int = 15  # Require more edges before accepting
+    graph_edge_max_tokens: int = 600  # More tokens for edge-only generation
+    graph_include_orphans: bool = False  # Filter out disconnected nodes
 
     # OpenAI-compatible client defaults (LM Studio)
     openai_timeout_seconds: int = 120

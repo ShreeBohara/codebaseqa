@@ -397,6 +397,40 @@ class GamificationService:
 
     def record_lesson_complete(self, repo_id: str, lesson_id: str, time_seconds: int) -> XPGain:
         """Record lesson completion and award XP."""
+        from datetime import datetime
+        
+        # Check if already completed (prevent double XP)
+        existing = self._db.query(LessonProgress).filter(
+            LessonProgress.repository_id == repo_id,
+            LessonProgress.lesson_id == lesson_id,
+            LessonProgress.status == "completed"
+        ).first()
+        
+        if existing:
+            # Already completed, return 0 XP
+            return XPGain(amount=0, reason="already_completed")
+        
+        # Create or update lesson progress
+        progress = self._db.query(LessonProgress).filter(
+            LessonProgress.repository_id == repo_id,
+            LessonProgress.lesson_id == lesson_id
+        ).first()
+        
+        if not progress:
+            progress = LessonProgress(
+                repository_id=repo_id,
+                lesson_id=lesson_id,
+                status="completed",
+                completed_at=datetime.utcnow(),
+                time_spent_seconds=time_seconds
+            )
+            self._db.add(progress)
+        else:
+            progress.status = "completed"
+            progress.completed_at = datetime.utcnow()
+            progress.time_spent_seconds += time_seconds
+        
+        # Update user XP stats
         user_xp = self.get_or_create_user_xp(repo_id)
         user_xp.lessons_completed += 1
         self._db.commit()
@@ -409,6 +443,14 @@ class GamificationService:
 
         # Award XP
         return self.award_xp(repo_id, "lesson_complete")
+
+    def get_completed_lessons(self, repo_id: str) -> list[str]:
+        """Get list of completed lesson IDs for a repository."""
+        results = self._db.query(LessonProgress.lesson_id).filter(
+            LessonProgress.repository_id == repo_id,
+            LessonProgress.status == "completed"
+        ).all()
+        return [r[0] for r in results]
 
     def record_quiz_complete(self, repo_id: str, lesson_id: str, score: float) -> XPGain:
         """Record quiz completion and award XP based on score."""
