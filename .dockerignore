@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+**/node_modules
+apps/web/.next
+apps/web/tsconfig.tsbuildinfo
+apps/web/next-env.d.ts
+apps/web/pnpm-lock.yaml
+apps/web/pnpm-workspace.yaml
+apps/api/venv
+apps/api/.pytest_cache
+apps/api/.ruff_cache
+apps/api/.coverage
+apps/api/data
+data
+Documents
+*.log

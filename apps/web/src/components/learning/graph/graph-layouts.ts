@@ -1,18 +1,6 @@
 import dagre from 'dagre';
+import { Edge, Node, Position } from '@xyflow/react';
 import { LayoutType } from './GraphToolbar';
-
-// Type definitions for layout functions
-interface LayoutNode {
-    id: string;
-    position: { x: number; y: number };
-    [key: string]: unknown;
-}
-
-interface LayoutEdge {
-    source: string;
-    target: string;
-    [key: string]: unknown;
-}
 
 const nodeWidth = 200;
 const nodeHeight = 70;
@@ -20,7 +8,7 @@ const nodeHeight = 70;
 /**
  * Apply horizontal hierarchy layout using dagre (left-to-right)
  */
-export function applyHierarchyLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
+export function applyHierarchyLayout<T extends Node, E extends Edge>(nodes: T[], edges: E[]): T[] {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: 'LR', nodesep: 80, ranksep: 120 });
@@ -36,11 +24,11 @@ export function applyHierarchyLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
     dagre.layout(dagreGraph);
 
     return nodes.map((node) => {
-        const pos = dagreGraph.node(node.id);
+        const pos = dagreGraph.node(node.id) ?? { x: 0, y: 0 };
         return {
             ...node,
-            targetPosition: 'left',
-            sourcePosition: 'right',
+            targetPosition: Position.Left,
+            sourcePosition: Position.Right,
             position: {
                 x: pos.x - nodeWidth / 2,
                 y: pos.y - nodeHeight / 2,
@@ -52,7 +40,7 @@ export function applyHierarchyLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
 /**
  * Apply vertical tree layout using dagre (top-to-bottom)
  */
-export function applyVerticalLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
+export function applyVerticalLayout<T extends Node, E extends Edge>(nodes: T[], edges: E[]): T[] {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 100 });
@@ -68,11 +56,11 @@ export function applyVerticalLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
     dagre.layout(dagreGraph);
 
     return nodes.map((node) => {
-        const pos = dagreGraph.node(node.id);
+        const pos = dagreGraph.node(node.id) ?? { x: 0, y: 0 };
         return {
             ...node,
-            targetPosition: 'top',
-            sourcePosition: 'bottom',
+            targetPosition: Position.Top,
+            sourcePosition: Position.Bottom,
             position: {
                 x: pos.x - nodeWidth / 2,
                 y: pos.y - nodeHeight / 2,
@@ -84,7 +72,7 @@ export function applyVerticalLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
 /**
  * Apply radial layout - nodes arranged in circles around a center
  */
-export function applyRadialLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
+export function applyRadialLayout<T extends Node, E extends Edge>(nodes: T[], edges: E[]): T[] {
     if (nodes.length === 0) return nodes;
 
     // Find the root node (node with most outgoing edges or first node)
@@ -175,8 +163,8 @@ export function applyRadialLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
         const pos = positions.get(node.id) || { x: 0, y: 0 };
         return {
             ...node,
-            targetPosition: 'left',
-            sourcePosition: 'right',
+            targetPosition: Position.Left,
+            sourcePosition: Position.Right,
             position: {
                 x: pos.x - nodeWidth / 2,
                 y: pos.y - nodeHeight / 2,
@@ -188,7 +176,7 @@ export function applyRadialLayout(nodes: LayoutNode[], edges: LayoutEdge[]) {
 /**
  * Apply the specified layout to nodes
  */
-export function applyLayout(nodes: LayoutNode[], edges: LayoutEdge[], layout: LayoutType) {
+export function applyLayout<T extends Node, E extends Edge>(nodes: T[], edges: E[], layout: LayoutType): T[] {
     switch (layout) {
         case 'radial':
             return applyRadialLayout(nodes, edges);

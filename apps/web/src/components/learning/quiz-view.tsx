@@ -1,65 +1,106 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, ArrowRight, Award } from 'lucide-react';
-import { Quiz } from '@/lib/api-client';
+import { Check, X, ArrowRight, Award, Loader2 } from 'lucide-react';
+import { api, Quiz, QuizResultResponse } from '@/lib/api-client';
 import confetti from 'canvas-confetti';
 
 interface QuizViewProps {
+    repoId: string;
     quiz: Quiz;
     onClose: () => void;
+    onResultSubmitted?: (result: QuizResultResponse) => void;
 }
 
-export function QuizView({ quiz, onClose }: QuizViewProps) {
+export function QuizView({ repoId, quiz, onClose, onResultSubmitted }: QuizViewProps) {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
     const [isAnswered, setIsAnswered] = useState(false);
     const [score, setScore] = useState(0);
     const [showResult, setShowResult] = useState(false);
+    const [submittingResult, setSubmittingResult] = useState(false);
+    const [resultError, setResultError] = useState<string | null>(null);
+    const [backendResult, setBackendResult] = useState<QuizResultResponse | null>(null);
 
     const currentQuestion = quiz.questions[currentQuestionIndex];
     const isCorrect = selectedOption === currentQuestion.correct_option_index;
 
     const handleSelectOption = (index: number) => {
-        if (isAnswered) return;
+        if (isAnswered || submittingResult) return;
         setSelectedOption(index);
         setIsAnswered(true);
 
         if (index === currentQuestion.correct_option_index) {
-            setScore(s => s + 1);
+            setScore((value) => value + 1);
             confetti({
                 particleCount: 50,
                 spread: 60,
                 origin: { y: 0.8 },
-                colors: ['#6366f1', '#818cf8']
+                colors: ['#6366f1', '#818cf8'],
             });
         }
     };
 
-    const handleNext = () => {
-        if (currentQuestionIndex < quiz.questions.length - 1) {
-            setCurrentQuestionIndex(prev => prev + 1);
-            setSelectedOption(null);
-            setIsAnswered(false);
-        } else {
+    const submitQuizResult = async () => {
+        const totalQuestions = quiz.questions.length;
+        const normalizedScore = totalQuestions > 0 ? score / totalQuestions : 0;
+
+        setSubmittingResult(true);
+        setResultError(null);
+
+        try {
+            const result = await api.submitQuizResult(repoId, quiz.lesson_id, normalizedScore);
+            setBackendResult(result);
+            onResultSubmitted?.(result);
             setShowResult(true);
             confetti({
                 particleCount: 150,
                 spread: 100,
-                origin: { y: 0.6 }
+                origin: { y: 0.6 },
             });
+        } catch (error) {
+            console.error('Failed to submit quiz result:', error);
+            setResultError('Could not submit quiz result. Try again.');
+        } finally {
+            setSubmittingResult(false);
         }
     };
 
+    const handleNext = async () => {
+        if (currentQuestionIndex < quiz.questions.length - 1) {
+            setCurrentQuestionIndex((value) => value + 1);
+            setSelectedOption(null);
+            setIsAnswered(false);
+            return;
+        }
+
+        await submitQuizResult();
+    };
+
     if (showResult) {
+        const xpAwarded = backendResult
+            ? backendResult.xp_gained.amount + (backendResult.xp_gained.bonus ?? 0)
+            : 0;
+
         return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in zoom-in duration-300">
                 <div className="w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center mb-6">
                     <Award size={40} className="text-yellow-500" />
                 </div>
                 <h2 className="text-3xl font-bold text-white mb-2">Quiz Complete!</h2>
-                <p className="text-zinc-400 mb-8">
-                    You scored <span className="text-white font-bold">{score}</span> out of <span className="text-white font-bold">{quiz.questions.length}</span>
+                <p className="text-zinc-400 mb-4">
+                    You scored <span className="text-white font-bold">{score}</span> out of{' '}
+                    <span className="text-white font-bold">{quiz.questions.length}</span>
                 </p>
+
+                {backendResult && (
+                    <p className="text-sm text-indigo-300 mb-8">
+                        {backendResult.is_perfect
+                            ? `Perfect score! +${xpAwarded} XP`
+                            : backendResult.is_pass
+                                ? `Passed! +${xpAwarded} XP`
+                                : 'Keep practicing to pass the quiz.'}
+                    </p>
+                )}
 
                 <div className="flex gap-4">
                     <button
@@ -101,25 +142,25 @@ export function QuizView({ quiz, onClose }: QuizViewProps) {
 
                 <div className="space-y-3">
                     {currentQuestion.options.map((option, idx) => {
-                        let className = "w-full p-4 rounded-xl border-2 text-left transition-all relative ";
+                        let className = 'w-full p-4 rounded-xl border-2 text-left transition-all relative ';
 
                         if (isAnswered) {
                             if (idx === currentQuestion.correct_option_index) {
-                                className += "border-green-500 bg-green-500/10 text-green-100";
+                                className += 'border-green-500 bg-green-500/10 text-green-100';
                             } else if (idx === selectedOption) {
-                                className += "border-red-500 bg-red-500/10 text-red-100 opacity-60";
+                                className += 'border-red-500 bg-red-500/10 text-red-100 opacity-60';
                             } else {
-                                className += "border-zinc-800 bg-zinc-900/50 text-zinc-500 opacity-50";
+                                className += 'border-zinc-800 bg-zinc-900/50 text-zinc-500 opacity-50';
                             }
                         } else {
-                            className += "border-zinc-800 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300";
+                            className += 'border-zinc-800 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300';
                         }
 
                         return (
                             <button
                                 key={idx}
                                 onClick={() => handleSelectOption(idx)}
-                                disabled={isAnswered}
+                                disabled={isAnswered || submittingResult}
                                 className={className}
                             >
                                 <div className="flex items-center justify-between">
@@ -153,16 +194,30 @@ export function QuizView({ quiz, onClose }: QuizViewProps) {
                                 </p>
                             </div>
 
+                            {resultError && (
+                                <p className="text-sm text-red-400 mb-4">{resultError}</p>
+                            )}
+
                             <button
                                 onClick={handleNext}
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                                disabled={submittingResult}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
                             >
-                                {currentQuestionIndex < quiz.questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
-                                <ArrowRight size={18} />
+                                {submittingResult ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    <>
+                                        {currentQuestionIndex < quiz.questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
+                                        <ArrowRight size={18} />
+                                    </>
+                                )}
                             </button>
                         </motion.div>
                     )}
-                </ AnimatePresence>
+                </AnimatePresence>
             </div>
         </div>
     );

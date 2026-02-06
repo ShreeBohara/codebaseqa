@@ -1,53 +1,78 @@
 'use client';
 
-import { useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bug, Eye, Edit3, Check, X, Lightbulb, ChevronRight, Zap } from 'lucide-react';
-
-interface Challenge {
-    id: string;
-    lesson_id: string;
-    challenge_type: string;
-    data: Record<string, unknown>;
-    completed: boolean;
-    used_hint: boolean;
-}
+import { Bug, Eye, Edit3, Check, X, Lightbulb, ChevronRight, Zap, Loader2 } from 'lucide-react';
+import {
+    api,
+    BugHuntChallengeData,
+    Challenge,
+    ChallengeResult,
+    CodeTraceChallengeData,
+    FillBlankChallengeData,
+    FillBlankValidationItem,
+} from '@/lib/api-client';
 
 interface ChallengeViewProps {
+    repoId: string;
     challenge: Challenge;
-    onComplete: (correct: boolean, usedHint: boolean) => void;
+    onComplete: (result: ChallengeResult, usedHint: boolean) => void;
     onClose: () => void;
 }
 
 // Challenge Type Icons
-const CHALLENGE_ICONS: Record<string, React.ReactNode> = {
+const CHALLENGE_ICONS: Record<Challenge['challenge_type'], ReactNode> = {
     bug_hunt: <Bug size={20} />,
     code_trace: <Eye size={20} />,
-    fill_blank: <Edit3 size={20} />
+    fill_blank: <Edit3 size={20} />,
 };
 
-const CHALLENGE_LABELS: Record<string, string> = {
+const CHALLENGE_LABELS: Record<Challenge['challenge_type'], string> = {
     bug_hunt: 'Bug Hunt',
     code_trace: 'Code Trace',
-    fill_blank: 'Fill in the Blank'
+    fill_blank: 'Fill in the Blank',
 };
 
-const CHALLENGE_COLORS: Record<string, string> = {
+const CHALLENGE_COLORS: Record<Challenge['challenge_type'], string> = {
     bug_hunt: 'from-red-600 to-orange-600',
     code_trace: 'from-blue-600 to-cyan-600',
-    fill_blank: 'from-purple-600 to-pink-600'
+    fill_blank: 'from-purple-600 to-pink-600',
 };
 
-export function ChallengeView({ challenge, onComplete, onClose }: ChallengeViewProps) {
+export function ChallengeView({ repoId, challenge, onComplete, onClose }: ChallengeViewProps) {
     const [showHint, setShowHint] = useState(false);
-    const [result, setResult] = useState<{ correct: boolean; explanation?: string } | null>(null);
+    const [result, setResult] = useState<ChallengeResult | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleComplete = (correct: boolean, explanation?: string) => {
-        setResult({ correct, explanation });
-        // Delay to show result before closing
-        setTimeout(() => {
-            onComplete(correct, showHint);
-        }, 2000);
+    const xpAwarded = result?.xp_gained
+        ? result.xp_gained.amount + (result.xp_gained.bonus ?? 0)
+        : (result?.xp_earned ?? 0);
+
+    const handleValidate = async (answer: number | string[]) => {
+        if (submitting || result) {
+            return;
+        }
+
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            const validation = await api.validateChallenge(
+                repoId,
+                challenge.challenge_type,
+                challenge,
+                answer,
+                showHint
+            );
+            setResult(validation);
+            onComplete(validation, showHint);
+        } catch (validationError) {
+            console.error('Failed to validate challenge:', validationError);
+            setError('Could not validate your answer. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -72,7 +97,7 @@ export function ChallengeView({ challenge, onComplete, onClose }: ChallengeViewP
                             </div>
                             <div>
                                 <h2 className="font-bold text-lg">{CHALLENGE_LABELS[challenge.challenge_type]}</h2>
-                                <p className="text-sm text-white/80">+75 XP on completion</p>
+                                <p className="text-sm text-white/80">Scored by backend validation</p>
                             </div>
                         </div>
                         <button
@@ -88,32 +113,38 @@ export function ChallengeView({ challenge, onComplete, onClose }: ChallengeViewP
                 <div className="flex-1 overflow-y-auto p-6">
                     {challenge.challenge_type === 'bug_hunt' && (
                         <BugHuntChallenge
-                            data={challenge.data}
-                            onComplete={handleComplete}
+                            data={challenge.data as BugHuntChallengeData}
+                            onSubmit={handleValidate}
                             showHint={showHint}
+                            result={result}
+                            submitting={submitting}
                         />
                     )}
                     {challenge.challenge_type === 'code_trace' && (
                         <CodeTraceChallenge
-                            data={challenge.data}
-                            onComplete={handleComplete}
+                            data={challenge.data as CodeTraceChallengeData}
+                            onSubmit={handleValidate}
                             showHint={showHint}
+                            result={result}
+                            submitting={submitting}
                         />
                     )}
                     {challenge.challenge_type === 'fill_blank' && (
                         <FillBlankChallenge
-                            data={challenge.data}
-                            onComplete={handleComplete}
+                            data={challenge.data as FillBlankChallengeData}
+                            onSubmit={handleValidate}
                             showHint={showHint}
+                            result={result}
+                            submitting={submitting}
                         />
                     )}
                 </div>
 
                 {/* Footer */}
-                <div className="border-t border-zinc-800 p-4 flex items-center justify-between">
+                <div className="border-t border-zinc-800 p-4 flex items-center justify-between gap-3">
                     <button
                         onClick={() => setShowHint(true)}
-                        disabled={showHint}
+                        disabled={showHint || submitting || Boolean(result)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${showHint
                                 ? 'bg-yellow-500/10 text-yellow-400/50 cursor-not-allowed'
                                 : 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
@@ -123,31 +154,36 @@ export function ChallengeView({ challenge, onComplete, onClose }: ChallengeViewP
                         {showHint ? 'Hint Used' : 'Show Hint'}
                     </button>
 
-                    {/* Result Display */}
-                    <AnimatePresence>
-                        {result && (
-                            <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${result.correct
-                                        ? 'bg-green-500/20 text-green-400'
-                                        : 'bg-red-500/20 text-red-400'
-                                    }`}
-                            >
-                                {result.correct ? (
-                                    <>
-                                        <Check size={18} />
-                                        <span className="font-medium">Correct! +75 XP</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <X size={18} />
-                                        <span className="font-medium">Incorrect</span>
-                                    </>
-                                )}
-                            </motion.div>
+                    <div className="flex items-center gap-3">
+                        {error && (
+                            <span className="text-sm text-red-400">{error}</span>
                         )}
-                    </AnimatePresence>
+
+                        <AnimatePresence>
+                            {result && (
+                                <motion.div
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg ${result.correct
+                                            ? 'bg-green-500/20 text-green-400'
+                                            : 'bg-red-500/20 text-red-400'
+                                        }`}
+                                >
+                                    {result.correct ? (
+                                        <>
+                                            <Check size={18} />
+                                            <span className="font-medium">Correct! +{xpAwarded} XP</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <X size={18} />
+                                            <span className="font-medium">Incorrect</span>
+                                        </>
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             </motion.div>
         </motion.div>
@@ -160,28 +196,23 @@ export function ChallengeView({ challenge, onComplete, onClose }: ChallengeViewP
 // =============================================================================
 
 interface BugHuntChallengeProps {
-    data: {
-        description: string;
-        code_snippet: string;
-        bug_line: number;
-        bug_description: string;
-        hint: string;
-    };
-    onComplete: (correct: boolean, explanation: string) => void;
+    data: BugHuntChallengeData;
+    onSubmit: (selectedLine: number) => void;
     showHint: boolean;
+    result: ChallengeResult | null;
+    submitting: boolean;
 }
 
-function BugHuntChallenge({ data, onComplete, showHint }: BugHuntChallengeProps) {
+function BugHuntChallenge({ data, onSubmit, showHint, result, submitting }: BugHuntChallengeProps) {
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
-    const [submitted, setSubmitted] = useState(false);
 
     const lines = data.code_snippet.split('\n');
+    const submitted = Boolean(result);
+    const correctLine = result?.correct_line ?? data.bug_line;
 
     const handleSubmit = () => {
         if (selectedLine === null) return;
-        setSubmitted(true);
-        const correct = selectedLine === data.bug_line;
-        onComplete(correct, data.bug_description);
+        onSubmit(selectedLine);
     };
 
     return (
@@ -207,13 +238,13 @@ function BugHuntChallenge({ data, onComplete, showHint }: BugHuntChallengeProps)
                         {lines.map((line, idx) => {
                             const lineNum = idx + 1;
                             const isSelected = selectedLine === lineNum;
-                            const isCorrect = submitted && lineNum === data.bug_line;
-                            const isWrong = submitted && isSelected && lineNum !== data.bug_line;
+                            const isCorrect = submitted && lineNum === correctLine;
+                            const isWrong = submitted && isSelected && lineNum !== correctLine;
 
                             return (
                                 <div
                                     key={idx}
-                                    onClick={() => !submitted && setSelectedLine(lineNum)}
+                                    onClick={() => !submitted && !submitting && setSelectedLine(lineNum)}
                                     className={`flex cursor-pointer transition-all rounded px-2 py-0.5 ${isCorrect
                                             ? 'bg-green-500/20 border-l-2 border-green-500'
                                             : isWrong
@@ -240,18 +271,18 @@ function BugHuntChallenge({ data, onComplete, showHint }: BugHuntChallengeProps)
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-zinc-800/50 rounded-lg p-4 text-sm text-zinc-300"
                 >
-                    <strong>Explanation:</strong> {data.bug_description}
+                    <strong>Explanation:</strong> {result?.explanation || data.bug_description}
                 </motion.div>
             )}
 
             {!submitted && (
                 <button
                     onClick={handleSubmit}
-                    disabled={selectedLine === null}
+                    disabled={selectedLine === null || submitting}
                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all"
                 >
-                    Submit Answer
-                    <ChevronRight size={18} />
+                    {submitting ? <Loader2 size={18} className="animate-spin" /> : 'Submit Answer'}
+                    {!submitting && <ChevronRight size={18} />}
                 </button>
             )}
         </div>
@@ -264,27 +295,22 @@ function BugHuntChallenge({ data, onComplete, showHint }: BugHuntChallengeProps)
 // =============================================================================
 
 interface CodeTraceChallengeProps {
-    data: {
-        description: string;
-        code_snippet: string;
-        question: string;
-        options: string[];
-        correct_index: number;
-        explanation: string;
-    };
-    onComplete: (correct: boolean, explanation: string) => void;
+    data: CodeTraceChallengeData;
+    onSubmit: (selectedIndex: number) => void;
     showHint: boolean;
+    result: ChallengeResult | null;
+    submitting: boolean;
 }
 
-function CodeTraceChallenge({ data, onComplete, showHint }: CodeTraceChallengeProps) {
+function CodeTraceChallenge({ data, onSubmit, showHint, result, submitting }: CodeTraceChallengeProps) {
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
-    const [submitted, setSubmitted] = useState(false);
+
+    const submitted = Boolean(result);
+    const correctIndex = result?.correct_index ?? data.correct_index;
 
     const handleSubmit = () => {
         if (selectedOption === null) return;
-        setSubmitted(true);
-        const correct = selectedOption === data.correct_index;
-        onComplete(correct, data.explanation);
+        onSubmit(selectedOption);
     };
 
     return (
@@ -312,13 +338,13 @@ function CodeTraceChallenge({ data, onComplete, showHint }: CodeTraceChallengePr
             <div className="grid grid-cols-2 gap-3">
                 {data.options.map((option, idx) => {
                     const isSelected = selectedOption === idx;
-                    const isCorrect = submitted && idx === data.correct_index;
-                    const isWrong = submitted && isSelected && idx !== data.correct_index;
+                    const isCorrect = submitted && idx === correctIndex;
+                    const isWrong = submitted && isSelected && idx !== correctIndex;
 
                     return (
                         <button
                             key={idx}
-                            onClick={() => !submitted && setSelectedOption(idx)}
+                            onClick={() => !submitted && !submitting && setSelectedOption(idx)}
                             className={`p-4 rounded-xl border text-left font-mono transition-all ${isCorrect
                                     ? 'bg-green-500/20 border-green-500 text-green-300'
                                     : isWrong
@@ -340,18 +366,18 @@ function CodeTraceChallenge({ data, onComplete, showHint }: CodeTraceChallengePr
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-zinc-800/50 rounded-lg p-4 text-sm text-zinc-300"
                 >
-                    <strong>Explanation:</strong> {data.explanation}
+                    <strong>Explanation:</strong> {result?.explanation || data.explanation}
                 </motion.div>
             )}
 
             {!submitted && (
                 <button
                     onClick={handleSubmit}
-                    disabled={selectedOption === null}
+                    disabled={selectedOption === null || submitting}
                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all"
                 >
-                    Submit Answer
-                    <ChevronRight size={18} />
+                    {submitting ? <Loader2 size={18} className="animate-spin" /> : 'Submit Answer'}
+                    {!submitting && <ChevronRight size={18} />}
                 </button>
             )}
         </div>
@@ -364,65 +390,63 @@ function CodeTraceChallenge({ data, onComplete, showHint }: CodeTraceChallengePr
 // =============================================================================
 
 interface FillBlankChallengeProps {
-    data: {
-        description: string;
-        code_with_blanks: string;
-        blanks: Array<{ id: string; answer: string; options: string[] }>;
-    };
-    onComplete: (correct: boolean, explanation: string) => void;
+    data: FillBlankChallengeData;
+    onSubmit: (answers: string[]) => void;
     showHint: boolean;
+    result: ChallengeResult | null;
+    submitting: boolean;
 }
 
-function FillBlankChallenge({ data, onComplete, showHint }: FillBlankChallengeProps) {
+function FillBlankChallenge({ data, onSubmit, showHint, result, submitting }: FillBlankChallengeProps) {
     const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [submitted, setSubmitted] = useState(false);
-    const [results, setResults] = useState<Record<string, boolean>>({});
+
+    const submitted = Boolean(result);
+    const validationMap = useMemo<Record<string, FillBlankValidationItem>>(() => {
+        const items = result?.results ?? [];
+        return items.reduce<Record<string, FillBlankValidationItem>>((acc, item) => {
+            acc[item.id] = item;
+            return acc;
+        }, {});
+    }, [result]);
 
     const handleSubmit = () => {
-        setSubmitted(true);
-
-        const newResults: Record<string, boolean> = {};
-        let allCorrect = true;
-
-        data.blanks.forEach((blank) => {
-            const correct = answers[blank.id]?.toLowerCase() === blank.answer.toLowerCase();
-            newResults[blank.id] = correct;
-            if (!correct) allCorrect = false;
-        });
-
-        setResults(newResults);
-        onComplete(allCorrect, `Answers: ${data.blanks.map(b => b.answer).join(', ')}`);
+        const orderedAnswers = data.blanks.map((blank) => answers[blank.id] || '');
+        onSubmit(orderedAnswers);
     };
 
-    // Render code with interactive blanks
     const renderCodeWithBlanks = () => {
         const codeDisplay = data.code_with_blanks;
 
         return (
             <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap">
-                {codeDisplay.split('___').map((part, idx) => (
-                    <span key={idx}>
-                        {part}
-                        {idx < data.blanks.length && (
-                            <select
-                                value={answers[data.blanks[idx].id] || ''}
-                                onChange={(e) => setAnswers({ ...answers, [data.blanks[idx].id]: e.target.value })}
-                                disabled={submitted}
-                                className={`mx-1 px-2 py-1 rounded border transition-all ${submitted
-                                        ? results[data.blanks[idx].id]
-                                            ? 'bg-green-500/20 border-green-500 text-green-300'
-                                            : 'bg-red-500/20 border-red-500 text-red-300'
-                                        : 'bg-zinc-800 border-zinc-600 text-white'
-                                    }`}
-                            >
-                                <option value="">Select...</option>
-                                {data.blanks[idx].options.map((opt) => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                            </select>
-                        )}
-                    </span>
-                ))}
+                {codeDisplay.split('___').map((part, idx) => {
+                    const blank = data.blanks[idx];
+                    const validation = blank ? validationMap[blank.id] : undefined;
+
+                    return (
+                        <span key={idx}>
+                            {part}
+                            {blank && (
+                                <select
+                                    value={answers[blank.id] || ''}
+                                    onChange={(event) => setAnswers({ ...answers, [blank.id]: event.target.value })}
+                                    disabled={submitted || submitting}
+                                    className={`mx-1 px-2 py-1 rounded border transition-all ${submitted
+                                            ? validation?.correct
+                                                ? 'bg-green-500/20 border-green-500 text-green-300'
+                                                : 'bg-red-500/20 border-red-500 text-red-300'
+                                            : 'bg-zinc-800 border-zinc-600 text-white'
+                                        }`}
+                                >
+                                    <option value="">Select...</option>
+                                    {blank.options.map((option) => (
+                                        <option key={option} value={option}>{option}</option>
+                                    ))}
+                                </select>
+                            )}
+                        </span>
+                    );
+                })}
             </pre>
         );
     };
@@ -456,18 +480,18 @@ function FillBlankChallenge({ data, onComplete, showHint }: FillBlankChallengePr
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-zinc-800/50 rounded-lg p-4 text-sm text-zinc-300"
                 >
-                    <strong>Correct answers:</strong> {data.blanks.map(b => b.answer).join(', ')}
+                    <strong>Correct answers:</strong> {data.blanks.map((blank) => blank.answer).join(', ')}
                 </motion.div>
             )}
 
             {!submitted && (
                 <button
                     onClick={handleSubmit}
-                    disabled={Object.keys(answers).length < data.blanks.length}
+                    disabled={Object.keys(answers).length < data.blanks.length || submitting}
                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all"
                 >
-                    Submit Answer
-                    <ChevronRight size={18} />
+                    {submitting ? <Loader2 size={18} className="animate-spin" /> : 'Submit Answer'}
+                    {!submitting && <ChevronRight size={18} />}
                 </button>
             )}
         </div>
@@ -480,7 +504,7 @@ function FillBlankChallenge({ data, onComplete, showHint }: FillBlankChallengePr
 // =============================================================================
 
 interface ChallengeButtonProps {
-    type: 'bug_hunt' | 'code_trace' | 'fill_blank';
+    type: Challenge['challenge_type'];
     onClick: () => void;
     disabled?: boolean;
 }

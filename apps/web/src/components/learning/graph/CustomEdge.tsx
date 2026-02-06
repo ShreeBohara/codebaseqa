@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { getBezierPath, EdgeLabelRenderer, BaseEdge, Position } from '@xyflow/react';
+import { BaseEdge, Edge, EdgeLabelRenderer, EdgeProps, getBezierPath } from '@xyflow/react';
 import { motion } from 'framer-motion';
 
 // Edge type configuration
@@ -54,25 +54,14 @@ export interface CustomEdgeData {
     [key: string]: unknown;
 }
 
+export type CustomFlowEdge = Edge<CustomEdgeData, 'custom'>;
+
 // Get stroke width based on weight (1-5)
 function getWeightedStrokeWidth(weight?: number, isHighlighted?: boolean): number {
     const baseWidth = isHighlighted ? 3 : 2;
     if (!weight) return baseWidth;
     // Scale from 1.5 (weight=1) to 4 (weight=5)
     return 1.5 + (weight - 1) * 0.625 + (isHighlighted ? 1 : 0);
-}
-
-interface CustomEdgeProps {
-    id: string;
-    sourceX: number;
-    sourceY: number;
-    targetX: number;
-    targetY: number;
-    sourcePosition: Position;
-    targetPosition: Position;
-    data?: CustomEdgeData;
-    selected?: boolean;
-    markerEnd?: string;
 }
 
 function CustomEdgeComponent({
@@ -86,7 +75,7 @@ function CustomEdgeComponent({
     data,
     selected,
     markerEnd,
-}: CustomEdgeProps) {
+}: EdgeProps<CustomFlowEdge>) {
     const edgeType = (data?.type as EdgeType) || 'imports';
     const config = EDGE_TYPES[edgeType] || EDGE_TYPES.imports;
 

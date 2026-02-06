@@ -26,7 +26,7 @@ vi.mock('framer-motion', () => ({
 
 // Mock child components to simplify testing
 vi.mock('./quiz-view', () => ({
-    QuizView: ({ onClose }: { onClose: () => void }) => (
+    QuizView: ({ onClose }: { onClose: () => void; [key: string]: unknown }) => (
         <div data-testid="quiz-view">
             <h1>Quiz Interface</h1>
             <button onClick={onClose}>Close Quiz</button>
@@ -55,6 +55,27 @@ const mockContent = {
         }
     ],
     diagram_mermaid: 'graph TD; A-->B;'
+}
+
+const mockStats = {
+    total_xp: 100,
+    level: {
+        level: 1,
+        title: 'Newcomer',
+        icon: '🌱',
+        current_xp: 100,
+        xp_for_next_level: 200,
+        xp_progress: 0.5,
+    },
+    streak: {
+        current: 1,
+        longest: 1,
+        active_today: true,
+    },
+    lessons_completed: 1,
+    quizzes_passed: 0,
+    challenges_completed: 0,
+    perfect_quizzes: 0,
 }
 
 describe('LessonView', () => {
@@ -128,7 +149,7 @@ describe('LessonView', () => {
     it('handles completion', async () => {
         vi.mocked(api.completeLesson).mockResolvedValueOnce({
             xp_gained: { amount: 100, reason: 'Completed' },
-            stats: {} as Record<string, unknown>
+            stats: mockStats
         })
 
         render(

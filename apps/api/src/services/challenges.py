@@ -97,7 +97,11 @@ class ChallengeService:
         prompt = self._build_challenge_prompt(challenge_type, context, code_references)
 
         try:
-            response = await self._llm.generate(prompt)
+            messages = [
+                {"role": "system", "content": "You are a challenge generator. Output valid JSON only."},
+                {"role": "user", "content": prompt},
+            ]
+            response = await self._llm.generate(messages)
             challenge_data = self._parse_challenge_response(response, challenge_type)
 
             return {

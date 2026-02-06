@@ -2,12 +2,14 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from src.dependencies import get_gamification_service, get_learning_service
+from src.dependencies import get_db, get_gamification_service, get_learning_service
 from src.models.codetour_schemas import CodeTour
 from src.models.learning import LessonContent, Persona, Syllabus
 from src.services.gamification import GamificationService, UserStats
 from src.services.learning_service import LearningService
+from src.services.challenges import ChallengeService
 
 router = APIRouter(tags=["learning"])
 
@@ -262,15 +264,12 @@ async def generate_challenge(
     repo_id: str,
     lesson_id: str,
     request: GenerateChallengeRequest,
-    learning_service: LearningService = Depends(get_learning_service)
+    learning_service: LearningService = Depends(get_learning_service),
+    db: Session = Depends(get_db),
 ):
     """Generate an interactive challenge for a lesson."""
-    from src.dependencies import get_db
-    from src.services.challenges import ChallengeService
-
     try:
         # Create challenge service with LLM from learning service
-        db = next(get_db())
         challenge_service = ChallengeService(db, learning_service._llm)
 
         challenge = await challenge_service.generate_challenge(
@@ -295,14 +294,11 @@ class ValidateBugHuntRequest(BaseModel):
 async def validate_bug_hunt(
     repo_id: str,
     request: ValidateBugHuntRequest,
-    gamification: GamificationService = Depends(get_gamification_service)
+    gamification: GamificationService = Depends(get_gamification_service),
+    db: Session = Depends(get_db),
 ):
     """Validate a bug hunt challenge answer."""
-    from src.dependencies import get_db
-    from src.services.challenges import ChallengeService
-
     try:
-        db = next(get_db())
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_bug_hunt(request.challenge, request.selected_line)
 
@@ -310,6 +306,8 @@ async def validate_bug_hunt(
         if result["correct"]:
             xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
+            result["xp_earned"] = xp_gain.amount + xp_gain.bonus
+            result["stats"] = gamification.get_user_stats(repo_id).model_dump()
 
         return result
     except Exception as e:
@@ -326,14 +324,11 @@ class ValidateCodeTraceRequest(BaseModel):
 async def validate_code_trace(
     repo_id: str,
     request: ValidateCodeTraceRequest,
-    gamification: GamificationService = Depends(get_gamification_service)
+    gamification: GamificationService = Depends(get_gamification_service),
+    db: Session = Depends(get_db),
 ):
     """Validate a code trace challenge answer."""
-    from src.dependencies import get_db
-    from src.services.challenges import ChallengeService
-
     try:
-        db = next(get_db())
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_code_trace(request.challenge, request.selected_index)
 
@@ -341,6 +336,8 @@ async def validate_code_trace(
         if result["correct"]:
             xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
+            result["xp_earned"] = xp_gain.amount + xp_gain.bonus
+            result["stats"] = gamification.get_user_stats(repo_id).model_dump()
 
         return result
     except Exception as e:
@@ -357,14 +354,11 @@ class ValidateFillBlankRequest(BaseModel):
 async def validate_fill_blank(
     repo_id: str,
     request: ValidateFillBlankRequest,
-    gamification: GamificationService = Depends(get_gamification_service)
+    gamification: GamificationService = Depends(get_gamification_service),
+    db: Session = Depends(get_db),
 ):
     """Validate a fill in the blank challenge answer."""
-    from src.dependencies import get_db
-    from src.services.challenges import ChallengeService
-
     try:
-        db = next(get_db())
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_fill_blank(request.challenge, request.answers)
 
@@ -372,6 +366,8 @@ async def validate_fill_blank(
         if result["correct"]:
             xp_gain = gamification.record_challenge_complete(repo_id, request.used_hint)
             result["xp_gained"] = xp_gain.model_dump()
+            result["xp_earned"] = xp_gain.amount + xp_gain.bonus
+            result["stats"] = gamification.get_user_stats(repo_id).model_dump()
 
         return result
     except Exception as e:

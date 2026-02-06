@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { LessonContent, CodeReference, Quiz, Challenge, api } from '@/lib/api-client';
+import { Challenge, ChallengeResult, CodeReference, LessonContent, Quiz, QuizResultResponse, UserStats, api } from '@/lib/api-client';
 import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, Check, Bug, Eye, Edit3, Download } from 'lucide-react';
 import { QuizView } from './quiz-view';
 import { MermaidDiagram } from './MermaidDiagram';
@@ -11,6 +11,7 @@ import confetti from 'canvas-confetti';
 interface XPGainResult {
     amount: number;
     reason: string;
+    bonus?: number;
 }
 
 interface LessonViewProps {
@@ -18,9 +19,10 @@ interface LessonViewProps {
     content: LessonContent;
     onClose: () => void;
     onComplete?: (xpGain: XPGainResult) => void;
+    onGamificationUpdate?: (xpGain: XPGainResult, stats?: UserStats) => void;
 }
 
-export function LessonView({ repoId, content, onClose, onComplete }: LessonViewProps) {
+export function LessonView({ repoId, content, onClose, onComplete, onGamificationUpdate }: LessonViewProps) {
     const [activeRef, setActiveRef] = useState<CodeReference | null>(
         content.code_references.length > 0 ? content.code_references[0] : null
     );
@@ -93,10 +95,17 @@ export function LessonView({ repoId, content, onClose, onComplete }: LessonViewP
         }
     };
 
-    const handleChallengeComplete = (correct: boolean, usedHint: boolean) => {
-        setShowChallenge(false);
-        // XP is awarded by backend during validation, but we could show a toast here
-        console.log(`Challenge completed: correct=${correct}, usedHint=${usedHint}`);
+    const handleChallengeComplete = (result: ChallengeResult, usedHint: boolean) => {
+        if (result.correct && result.xp_gained) {
+            onGamificationUpdate?.(result.xp_gained, result.stats);
+        }
+        console.log(`Challenge completed: correct=${result.correct}, usedHint=${usedHint}`);
+    };
+
+    const handleQuizResultSubmitted = (result: QuizResultResponse) => {
+        if (result.xp_gained.amount > 0 || (result.xp_gained.bonus ?? 0) > 0) {
+            onGamificationUpdate?.(result.xp_gained, result.stats);
+        }
     };
 
     const handleExportCodeTour = async () => {
@@ -157,7 +166,12 @@ export function LessonView({ repoId, content, onClose, onComplete }: LessonViewP
                                 <X size={24} />
                             </button>
                         </div>
-                        <QuizView quiz={quiz} onClose={() => setShowQuiz(false)} />
+                        <QuizView
+                            repoId={repoId}
+                            quiz={quiz}
+                            onClose={() => setShowQuiz(false)}
+                            onResultSubmitted={handleQuizResultSubmitted}
+                        />
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -166,6 +180,7 @@ export function LessonView({ repoId, content, onClose, onComplete }: LessonViewP
             <AnimatePresence>
                 {showChallenge && challenge && (
                     <ChallengeView
+                        repoId={repoId}
                         challenge={challenge}
                         onComplete={handleChallengeComplete}
                         onClose={() => setShowChallenge(false)}

@@ -152,18 +152,24 @@ class RepoManager:
 
     async def get_file_content(self, owner: str, name: str, file_path: str) -> str:
         """Read content of a specific file in the repository."""
+        requested_path = Path(file_path)
+        if requested_path.is_absolute():
+            raise ValueError(f"Invalid file path: {file_path}")
+
         repo_root = self.get_local_path(owner, name).resolve()
-        target_path = (repo_root / file_path).resolve()
+        target_path = (repo_root / requested_path).resolve()
 
         # Security check: Ensure target is within repo root
-        if not str(target_path).startswith(str(repo_root)):
+        try:
+            target_path.relative_to(repo_root)
+        except ValueError:
             raise ValueError(f"Invalid file path: {file_path}")
 
         if not target_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         if not target_path.is_file():
-             raise ValueError(f"Path is not a file: {file_path}")
+            raise ValueError(f"Path is not a file: {file_path}")
 
         # Read file with utf-8, ignoring errors
         with open(target_path, "r", encoding="utf-8", errors="ignore") as f:

@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Node, NodeProps, Position } from '@xyflow/react';
 import { motion } from 'framer-motion';
 import {
     Component,
@@ -125,6 +125,8 @@ export interface CustomNodeData {
     [key: string]: unknown; // Index signature for ReactFlow compatibility
 }
 
+export type CustomFlowNode = Node<CustomNodeData, 'custom'>;
+
 // Get size multiplier based on importance (1-10)
 function getImportanceSizeMultiplier(importance?: number): number {
     if (!importance) return 1;
@@ -133,7 +135,7 @@ function getImportanceSizeMultiplier(importance?: number): number {
 }
 
 // Custom Node Component
-function CustomNodeComponent({ data, selected }: { data: CustomNodeData; selected?: boolean }) {
+function CustomNodeComponent({ data, selected }: NodeProps<CustomFlowNode>) {
     const fileType = data.fileType || detectFileType(data.filePath || data.label);
     // Fallback to 'default' if the fileType doesn't exist in FILE_TYPES
     const config = FILE_TYPES[fileType as keyof typeof FILE_TYPES] || FILE_TYPES.default;

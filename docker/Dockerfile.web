@@ -1,5 +1,5 @@
 # Next.js Dockerfile
-FROM node:20-slim AS base
+FROM node:20-slim AS deps
 
 # Install pnpm
 ENV PNPM_HOME="/pnpm"
@@ -8,23 +8,18 @@ RUN corepack enable
 
 WORKDIR /app
 
-# Copy workspace config
-COPY pnpm-workspace.yaml package.json turbo.json ./
+# Copy workspace manifest files needed for dependency resolution
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
+COPY apps/web/package.json apps/web/package.json
 
-# Copy package.json files
-COPY apps/web/package.json apps/web/
-COPY apps/api/package.json apps/api/
-COPY packages/shared/package.json packages/shared/
-COPY packages/ui/package.json packages/ui/
+# Install only web workspace dependencies
+RUN pnpm install --no-frozen-lockfile --filter web...
 
-# Install dependencies (frozen lockfile not possible without full lockfile)
-RUN pnpm install
+FROM deps AS builder
 
-# Copy source code
+# Copy source code and build web app
 COPY . .
-
-# Build
-RUN pnpm turbo run build --filter=web...
+RUN pnpm --filter web build
 
 # Production image
 FROM node:20-slim AS runner
@@ -34,9 +29,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Copy built artifacts
-COPY --from=base /app/apps/web/.next/standalone ./
-COPY --from=base /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=base /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
 

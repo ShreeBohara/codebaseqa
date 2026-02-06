@@ -183,21 +183,59 @@ export interface QuizResultResponse {
 }
 
 // Challenge Types
-export interface Challenge {
+export type ChallengeType = 'bug_hunt' | 'code_trace' | 'fill_blank';
+
+export interface BugHuntChallengeData {
+  description: string;
+  code_snippet: string;
+  bug_line: number;
+  bug_description: string;
+  hint: string;
+}
+
+export interface CodeTraceChallengeData {
+  description: string;
+  code_snippet: string;
+  question: string;
+  options: string[];
+  correct_index: number;
+  explanation: string;
+}
+
+export interface FillBlankChallengeData {
+  description: string;
+  code_with_blanks: string;
+  blanks: Array<{ id: string; answer: string; options: string[] }>;
+}
+
+export type ChallengeData = BugHuntChallengeData | CodeTraceChallengeData | FillBlankChallengeData;
+
+export interface Challenge<TData extends ChallengeData = ChallengeData> {
   id: string;
   lesson_id: string;
-  challenge_type: string;
-  data: Record<string, unknown>;
+  challenge_type: ChallengeType;
+  data: TData;
   completed: boolean;
   used_hint: boolean;
+}
+
+export interface FillBlankValidationItem {
+  id: string;
+  correct: boolean;
+  correct_answer: string;
+  user_answer: string;
 }
 
 export interface ChallengeResult {
   correct: boolean;
   explanation?: string;
   correct_answer?: string;
+  correct_line?: number;
+  correct_index?: number;
+  results?: FillBlankValidationItem[];
   xp_earned?: number;
   xp_gained?: XPGain;
+  stats?: UserStats;
 }
 
 class ApiClient {
@@ -414,7 +452,7 @@ class ApiClient {
   }
 
   // Challenge endpoints
-  async generateChallenge(repoId: string, lessonId: string, challengeType: string, context: string = ''): Promise<Challenge> {
+  async generateChallenge(repoId: string, lessonId: string, challengeType: ChallengeType, context: string = ''): Promise<Challenge> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/challenge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -424,13 +462,19 @@ class ApiClient {
     return res.json();
   }
 
-  async validateChallenge(repoId: string, challengeType: string, challenge: Challenge, answer: number | string[]): Promise<ChallengeResult> {
+  async validateChallenge(
+    repoId: string,
+    challengeType: ChallengeType,
+    challenge: Challenge,
+    answer: number | string[],
+    usedHint = false
+  ): Promise<ChallengeResult> {
     const endpoint = `${this.baseUrl}/api/learning/${repoId}/challenges/validate/${challengeType}`;
     const body = challengeType === 'bug_hunt'
-      ? { challenge, selected_line: answer }
+      ? { challenge, selected_line: answer, used_hint: usedHint }
       : challengeType === 'code_trace'
-        ? { challenge, selected_index: answer }
-        : { challenge, answers: answer };
+        ? { challenge, selected_index: answer, used_hint: usedHint }
+        : { challenge, answers: answer, used_hint: usedHint };
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -460,12 +504,18 @@ export interface GraphNode {
   label: string;
   type: string;
   description: string;
+  group?: string;
+  importance?: number;
+  loc?: number;
+  exports?: string[];
 }
 
 export interface GraphEdge {
   source: string;
   target: string;
   label: string;
+  type?: string;
+  weight?: number;
 }
 
 export interface DependencyGraph {

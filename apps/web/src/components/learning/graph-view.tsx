@@ -2,15 +2,17 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
+    Background,
+    BackgroundVariant,
+    Controls,
+    EdgeTypes,
+    MiniMap,
+    Node,
+    NodeTypes,
     ReactFlow,
     ReactFlowProvider,
-    Controls,
-    Background,
-    MiniMap,
-    useNodesState,
     useEdgesState,
-    BackgroundVariant,
-    useReactFlow,
+    useNodesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
@@ -19,8 +21,8 @@ import { api, DependencyGraph } from '@/lib/api-client';
 import { Loader2, RefreshCw, Search, X, Sparkles } from 'lucide-react';
 
 // Import custom components
-import { CustomNode, detectFileType, FILE_TYPES } from './graph/CustomNode';
-import { CustomEdge } from './graph/CustomEdge';
+import { CustomFlowNode, CustomNode, CustomNodeData, FILE_TYPES, detectFileType } from './graph/CustomNode';
+import { CustomEdge, CustomFlowEdge, EdgeType } from './graph/CustomEdge';
 import { GraphLegend } from './graph/GraphLegend';
 import { NodeDetailPanel } from './graph/NodeDetailPanel';
 import { GraphToolbar, LayoutType } from './graph/GraphToolbar';
@@ -30,55 +32,18 @@ interface GraphViewProps {
     repoId: string;
 }
 
-const nodeWidth = 200;
-const nodeHeight = 70;
-
-// Type definitions for graph data
-interface GraphNodeData {
-    label: string;
-    description?: string;
-    filePath: string;
-    fileType: string;
-    importance?: number;
-    linesOfCode?: number;
-    group?: string;
-    exports?: string[];
-}
-
-interface GraphNode {
-    id: string;
-    type: string;
-    data: GraphNodeData;
-    position: { x: number; y: number };
-}
-
-interface GraphEdgeData {
-    label?: string;
-    type?: string;
-    weight?: number;
-}
-
-interface GraphEdge {
-    id: string;
-    source: string;
-    target: string;
-    type: string;
-    data: GraphEdgeData;
-    animated: boolean;
-}
-
 // Register custom node and edge types
 const nodeTypes = {
-    custom: CustomNode as React.ComponentType,
-};
+    custom: CustomNode,
+} as unknown as NodeTypes;
 
 const edgeTypes = {
-    custom: CustomEdge as React.ComponentType,
-};
+    custom: CustomEdge,
+} as unknown as EdgeTypes;
 
 export function GraphView({ repoId }: GraphViewProps) {
-    const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
-    const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
+    const [nodes, setNodes, onNodesChange] = useNodesState<CustomFlowNode>([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState<CustomFlowEdge>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -89,8 +54,8 @@ export function GraphView({ repoId }: GraphViewProps) {
     const hasFetchedRef = useRef(false);
     const isFetchingRef = useRef(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const rawNodesRef = useRef<GraphNode[]>([]);  // Store nodes without layout
-    const rawEdgesRef = useRef<GraphEdge[]>([]);  // Store edges
+    const rawNodesRef = useRef<CustomFlowNode[]>([]);  // Store nodes without layout
+    const rawEdgesRef = useRef<CustomFlowEdge[]>([]);  // Store edges
 
     const loadGraph = useCallback(async (force = false) => {
         // Prevent concurrent fetches
@@ -111,41 +76,41 @@ export function GraphView({ repoId }: GraphViewProps) {
                 return;
             }
 
-            // Create nodes with custom type and data (including new fields)
-            const initialNodes = data.nodes.map((n: DependencyGraph['nodes'][number]) => {
-                const fileType = n.type || detectFileType(n.id);
+            // Create nodes with custom type and data (including enhanced fields)
+            const initialNodes: CustomFlowNode[] = data.nodes.map((node) => {
+                const normalizedType = node.type as keyof typeof FILE_TYPES;
+                const fileType = normalizedType in FILE_TYPES ? normalizedType : detectFileType(node.id);
+
                 return {
-                    id: n.id,
+                    id: node.id,
                     type: 'custom',
                     data: {
-                        label: n.label || n.id.split('/').pop() || n.id,
-                        description: n.description,
-                        filePath: n.id,
+                        label: node.label || node.id.split('/').pop() || node.id,
+                        description: node.description,
+                        filePath: node.id,
                         fileType,
-                        // New enhanced fields
-                        importance: n.importance,
-                        linesOfCode: n.loc,
-                        group: n.group,
-                        exports: n.exports,
+                        importance: node.importance,
+                        linesOfCode: node.loc,
+                        group: node.group,
+                        exports: node.exports,
                     },
                     position: { x: 0, y: 0 },
                 };
             });
 
             // Filter and create edges with enhanced data
-            const nodeIds = new Set(initialNodes.map((n) => n.id));
-            type EdgeType = NonNullable<DependencyGraph['edges']>[number];
-            const initialEdges = (data.edges || [])
-                .filter((e: EdgeType) => nodeIds.has(e.source) && nodeIds.has(e.target))
-                .map((e: EdgeType) => ({
-                    id: `${e.source}-${e.target}`,
-                    source: e.source,
-                    target: e.target,
+            const nodeIds = new Set(initialNodes.map((node) => node.id));
+            const initialEdges: CustomFlowEdge[] = (data.edges || [])
+                .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+                .map((edge) => ({
+                    id: `${edge.source}-${edge.target}`,
+                    source: edge.source,
+                    target: edge.target,
                     type: 'custom',
                     data: {
-                        label: e.label || 'imports',
-                        type: e.type || 'imports',  // Use type from backend
-                        weight: e.weight,           // Edge weight for thickness
+                        label: edge.label || 'imports',
+                        type: (edge.type || 'imports') as EdgeType,
+                        weight: edge.weight,
                     },
                     animated: true,
                 }));
@@ -160,8 +125,8 @@ export function GraphView({ repoId }: GraphViewProps) {
             setNodes(layoutedNodes);
             setEdges(initialEdges);
             hasFetchedRef.current = true;
-        } catch (e) {
-            console.error('Failed to load graph:', e);
+        } catch (error) {
+            console.error('Failed to load graph:', error);
             setNodes([]);
             setEdges([]);
         } finally {
@@ -177,27 +142,39 @@ export function GraphView({ repoId }: GraphViewProps) {
 
     // Filter nodes based on search
     const filteredNodes = searchQuery
-        ? nodes.filter((n) =>
-            n.data.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            n.data.filePath.toLowerCase().includes(searchQuery.toLowerCase())
+        ? nodes.filter((node) =>
+            node.data.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            node.data.filePath.toLowerCase().includes(searchQuery.toLowerCase())
         )
         : nodes;
 
     // Minimap node color function
-    const getMinimapNodeColor = (node: { data?: { fileType?: string } }) => {
-        const fileType = node.data?.fileType || 'default';
-        return FILE_TYPES[fileType as keyof typeof FILE_TYPES]?.color || '#6366f1';
+    const getMinimapNodeColor = (node: Node) => {
+        const nodeData = node.data as CustomNodeData | undefined;
+        const fileType = nodeData?.fileType || 'default';
+        return FILE_TYPES[fileType]?.color || '#6366f1';
     };
 
     // Get selected node data
-    const selectedNodeData = selectedNode ? nodes.find((n) => n.id === selectedNode) : null;
+    const selectedNodeData = selectedNode ? nodes.find((node) => node.id === selectedNode) ?? null : null;
 
     // Compute incoming and outgoing edges for selected node
     const incomingEdges = selectedNode
-        ? edges.filter((e) => e.target === selectedNode).map((e) => ({ source: e.source, label: e.data?.label }))
+        ? edges
+            .filter((edge) => edge.target === selectedNode)
+            .map((edge) => ({
+                source: edge.source,
+                label: typeof edge.data?.label === 'string' ? edge.data.label : undefined,
+            }))
         : [];
+
     const outgoingEdges = selectedNode
-        ? edges.filter((e) => e.source === selectedNode).map((e) => ({ target: e.target, label: e.data?.label }))
+        ? edges
+            .filter((edge) => edge.source === selectedNode)
+            .map((edge) => ({
+                target: edge.target,
+                label: typeof edge.data?.label === 'string' ? edge.data.label : undefined,
+            }))
         : [];
 
     // Handle layout change
@@ -252,7 +229,7 @@ export function GraphView({ repoId }: GraphViewProps) {
                         <input
                             type="text"
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(event) => setSearchQuery(event.target.value)}
                             placeholder="Search nodes..."
                             className="w-full pl-9 pr-8 py-2 bg-zinc-900/90 backdrop-blur-sm border border-zinc-800 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all"
                         />
@@ -274,8 +251,8 @@ export function GraphView({ repoId }: GraphViewProps) {
                         </span>
                         {nodes.length > 0 && (
                             <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                edges.length / nodes.length >= 1.5 
-                                    ? 'bg-emerald-500/20 text-emerald-400' 
+                                edges.length / nodes.length >= 1.5
+                                    ? 'bg-emerald-500/20 text-emerald-400'
                                     : edges.length / nodes.length >= 1.0
                                         ? 'bg-amber-500/20 text-amber-400'
                                         : 'bg-red-500/20 text-red-400'
@@ -360,7 +337,7 @@ export function GraphView({ repoId }: GraphViewProps) {
                 <GraphLegend />
 
                 {/* ReactFlow Canvas */}
-                <ReactFlow
+                <ReactFlow<CustomFlowNode, CustomFlowEdge>
                     nodes={searchQuery ? filteredNodes : nodes}
                     edges={edges}
                     nodeTypes={nodeTypes}
