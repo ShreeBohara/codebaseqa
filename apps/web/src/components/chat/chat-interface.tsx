@@ -4,7 +4,9 @@ import { useState, useRef, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, ChatMessage } from '@/lib/api-client';
 import ReactMarkdown from 'react-markdown';
-import { Send, Loader2, FileCode, ChevronDown, Copy, Check, Sparkles, BookOpen, Shield, Network, Zap, User, Bot } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { Send, Loader2, FileCode, ChevronDown, Copy, Check, Sparkles, BookOpen, Shield, Network, Zap, User } from 'lucide-react';
 
 interface Message {
     id: string;
@@ -191,8 +193,8 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                                                     {message.content}
                                                 </div>
                                             ) : (
-                                                // AI Message Bubble (Transparent/Clean)
-                                                <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl rounded-tl-sm px-6 py-4">
+                                                // AI Message Bubble - Premium styling
+                                                <div className="bg-gradient-to-br from-zinc-900 to-zinc-900/80 border border-zinc-700/40 rounded-2xl rounded-tl-sm px-6 py-5 shadow-xl shadow-black/20 backdrop-blur-sm">
                                                     <div className="text-zinc-300 leading-relaxed">
                                                         {message.isStreaming && !message.content ? (
                                                             <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -205,11 +207,12 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                                                                     components={{
                                                                         code({ className, children, ...props }) {
                                                                             const match = /language-(\w+)/.exec(className || '');
+                                                                            const lang = match?.[1] || '';
                                                                             const isInline = !match && String(children).length < 100 && !String(children).includes('\n');
 
                                                                             if (isInline) {
                                                                                 return (
-                                                                                    <code className="bg-zinc-800 text-zinc-200 px-1.5 py-0.5 rounded text-xs font-mono border border-zinc-700/50" {...props}>
+                                                                                    <code className="bg-zinc-800/80 text-emerald-300 px-1.5 py-0.5 rounded text-[13px] font-mono" {...props}>
                                                                                         {children}
                                                                                     </code>
                                                                                 );
@@ -217,16 +220,26 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
 
                                                                             const code = String(children).replace(/\n$/, '');
                                                                             return (
-                                                                                <div className="my-4 bg-zinc-950 rounded-xl border border-zinc-800 overflow-hidden not-prose shadow-sm">
-                                                                                    <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50">
-                                                                                        <span className="text-xs text-zinc-500 font-mono">{match?.[1] || 'Code'}</span>
+                                                                                <div className="my-4 rounded-xl border border-zinc-700/50 overflow-hidden not-prose shadow-lg">
+                                                                                    <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-800/80 border-b border-zinc-700/50">
+                                                                                        <span className="text-xs text-zinc-400 font-medium uppercase tracking-wide">{lang || 'code'}</span>
                                                                                         <CopyButton text={code} />
                                                                                     </div>
-                                                                                    <pre className="p-4 overflow-x-auto m-0 text-sm leading-relaxed">
-                                                                                        <code className={`text-zinc-300 ${className || ''}`} {...props}>
-                                                                                            {children}
-                                                                                        </code>
-                                                                                    </pre>
+                                                                                    <SyntaxHighlighter
+                                                                                        language={lang || 'text'}
+                                                                                        style={oneDark}
+                                                                                        customStyle={{
+                                                                                            margin: 0,
+                                                                                            padding: '1rem',
+                                                                                            background: '#1a1b26',
+                                                                                            fontSize: '13px',
+                                                                                            lineHeight: '1.6',
+                                                                                        }}
+                                                                                        showLineNumbers={code.split('\n').length > 3}
+                                                                                        lineNumberStyle={{ color: '#4a5568', paddingRight: '1rem', minWidth: '2.5rem' }}
+                                                                                    >
+                                                                                        {code}
+                                                                                    </SyntaxHighlighter>
                                                                                 </div>
                                                                             );
                                                                         },
@@ -266,14 +279,20 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                                                                         exit={{ height: 0, opacity: 0 }}
                                                                         className="overflow-hidden"
                                                                     >
-                                                                        <div className="mt-3 space-y-2">
+                                                                        <div className="mt-3 space-y-3">
                                                                             {message.sources.map((src, i) => (
-                                                                                <div key={i} className="bg-zinc-950/50 rounded-lg border border-zinc-800 text-xs overflow-hidden">
-                                                                                    <div className="px-3 py-1.5 bg-zinc-900/30 border-b border-zinc-800/50 text-indigo-400 font-mono flex items-center justify-between">
-                                                                                        <span>{src.file}:{src.start_line}</span>
-                                                                                        <span className="text-zinc-600">{(src.score * 100).toFixed(0)}% relevant</span>
+                                                                                <div key={i} className="bg-zinc-950/80 rounded-xl border border-zinc-700/40 text-xs overflow-hidden hover:border-indigo-500/30 transition-colors">
+                                                                                    <div className="px-4 py-2.5 bg-zinc-800/50 border-b border-zinc-700/30 flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <FileCode size={14} className="text-indigo-400" />
+                                                                                            <span className="text-zinc-200 font-medium">{src.file.split('/').pop()}</span>
+                                                                                            <span className="text-zinc-500">L{src.start_line}-{src.end_line}</span>
+                                                                                        </div>
+                                                                                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-medium">
+                                                                                            {(src.score * 100).toFixed(0)}% match
+                                                                                        </span>
                                                                                     </div>
-                                                                                    <pre className="p-3 text-zinc-500 overflow-x-auto font-mono bg-black/20">{src.content}</pre>
+                                                                                    <pre className="p-3 text-zinc-400 overflow-x-auto font-mono text-[12px] leading-relaxed">{src.content}</pre>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
