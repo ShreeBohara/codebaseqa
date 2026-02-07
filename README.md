@@ -10,33 +10,24 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)
 
-[Demo](#demo) • [Features](#features) • [Quick Start](#quick-start) • [Architecture](#architecture) • [Author](#author)
+[Features](#features) • [Quick Start](#quick-start) • [Configuration](#configuration) • [API](#api-endpoints) • [CLI](#cli-usage)
 
 </div>
 
 ---
 
-## Demo
-
-<!-- TODO: Add a demo GIF here -->
-<!-- Record with Loom, Kap, or similar and add: -->
-<!-- ![CodebaseQA Demo](./docs/demo.gif) -->
-
-> **Coming Soon:** Demo video showing the full workflow
-
----
-
 ## What is CodebaseQA?
 
-CodebaseQA helps developers **understand unfamiliar codebases in minutes, not days**. 
+CodebaseQA helps developers understand unfamiliar repositories quickly with:
 
-Point it at any GitHub repository and get:
-- **Natural Language Q&A** - Ask questions in plain English, get answers with code references
-- **AI-Generated Learning Paths** - Personalized courses based on your role (New Hire, Auditor, Architect)
-- **Interactive Dependency Graphs** - Visualize how components connect
-- **Gamified Learning** - XP, achievements, and streaks to keep you motivated
+- **Chat Q&A over real code context** (RAG + source citations)
+- **Learning paths** tailored by persona
+- **Interactive lessons** with file-linked references and Mermaid diagrams
+- **Quizzes and coding challenges** (bug hunt, code trace, fill-in-the-blank)
+- **Gamification** (XP, levels, streaks, achievements, activity heatmap)
+- **Dependency graph visualization** with multiple layouts and PNG export
 
-Perfect for onboarding, code reviews, or exploring open-source projects.
+It supports both a web UI and a CLI workflow.
 
 ---
 
@@ -44,15 +35,18 @@ Perfect for onboarding, code reviews, or exploring open-source projects.
 
 | Feature | Description |
 |---------|-------------|
-| **Chat Q&A** | RAG-powered chat with query expansion and LLM reranking |
-| **Semantic Search** | Hybrid search combining vector similarity + keyword matching |
-| **Learning Paths** | 4 personas: New Hire, Security Auditor, Full Stack Dev, Archaeologist |
-| **Interactive Lessons** | Markdown content, code references, Mermaid diagrams |
-| **Quizzes & Challenges** | Bug hunt, code trace, fill-in-the-blank exercises |
-| **Gamification** | XP system, 6 levels, streaks, 15+ achievements |
-| **Dependency Graph** | Interactive visualization with hierarchy, radial, and tree layouts |
-| **CLI Tool** | Terminal-based workflow for power users |
-| **CodeTour Export** | Export lessons as VS Code CodeTour files |
+| **Repository Indexing** | Clone/index GitHub repos with progress states (pending, cloning, parsing, embedding, completed, failed) |
+| **RAG Chat** | Streaming responses with query expansion, hybrid retrieval, and source snippets |
+| **Semantic Search** | Vector + keyword hybrid search with language/file filters |
+| **Learning Personas** | New Hire, Security Auditor, Full Stack Dev, Archaeologist |
+| **Lesson Generation** | AI-generated lesson markdown, code references, optional Mermaid diagram |
+| **Quiz Generation** | Lesson-based multiple-choice quizzes |
+| **Challenges** | Bug Hunt, Code Trace, Fill-in-the-Blank generation + validation |
+| **Gamification** | XP rewards, 6 levels, streak tracking, achievements, dashboard analytics |
+| **Dependency Graph** | Interactive graph with hierarchy/radial/tree layouts, search, regenerate, PNG export |
+| **CodeTour Export** | Export lesson content as VS Code CodeTour (`.tour`) |
+| **CLI Tooling** | Index, ask, search, list, lessons, and CodeTour export from terminal |
+| **Demo Bootstrap** | Seed a demo repository via API/UI (`/api/repos/demo/seed`) |
 
 ---
 
@@ -60,177 +54,234 @@ Perfect for onboarding, code reviews, or exploring open-source projects.
 
 ### Prerequisites
 
-- Docker Desktop (recommended)
-- OR: Node.js 20+ and Python 3.11+ for local dev
-- OpenAI API key
+- Docker Desktop (recommended for fastest setup)
+- Or local dev: Node.js 20+ and Python 3.11+
+- At least one supported LLM provider (OpenAI, Anthropic, or Ollama)
 
-### One-Command Setup (Docker)
+### Docker Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/ShreeBohara/codebaseqa.git
 cd codebaseqa
-
-# Configure environment
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env and add provider credentials (typically OPENAI_API_KEY)
 
-# Start the application
 ./scripts/start-docker.sh
+# Optional demo seed:
+# ./scripts/start-docker.sh --with-demo
 ```
 
-- **Web UI:** http://localhost:3000
-- **API Docs:** http://localhost:8000/docs
-- **Health Check:** http://localhost:8000/health
+Endpoints after startup:
+
+- Web UI: `http://localhost:3000`
+- API docs: `http://localhost:8000/docs`
+- Health check: `http://localhost:8000/health`
 
 ### Local Development
 
 ```bash
-# Terminal 1: Start the API
+# Install JS workspace deps once (from repo root)
+pnpm install
+
+# Terminal 1: API
 cd apps/api
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 uvicorn src.main:app --reload
 
-# Terminal 2: Start the Frontend
+# Terminal 2: Web
 cd apps/web
-pnpm install
 pnpm dev
 ```
 
 ---
 
-## Architecture
+## Configuration
 
-```
-codebaseqa/
-├── apps/
-│   ├── api/          # FastAPI backend (Python)
-│   │   ├── src/
-│   │   │   ├── core/         # RAG pipeline, embeddings, LLM
-│   │   │   ├── services/     # Indexing, learning, gamification
-│   │   │   └── api/routes/   # REST endpoints
-│   │   └── tests/
-│   └── web/          # Next.js frontend (TypeScript)
-│       └── src/
-│           ├── app/          # Pages and routing
-│           ├── components/   # React components
-│           └── lib/          # API client, utilities
-├── cli/              # Command-line interface
-├── docker/           # Docker deployment
-└── docs/             # Documentation
-```
+CodebaseQA reads settings from environment variables (via `apps/api/src/config.py`).
 
-### Tech Stack
+### Core Settings
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | Next.js 16, React 19, TailwindCSS, Framer Motion, xyflow |
-| **Backend** | FastAPI, Python 3.11, SQLAlchemy |
-| **Code Parsing** | Tree-sitter (Python, JavaScript, TypeScript) |
-| **Vector Store** | ChromaDB with hybrid search |
-| **LLM** | OpenAI GPT-4o (BYOK - Bring Your Own Key) |
-| **Database** | SQLite (easy setup, no external deps) |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | SQLAlchemy DB URL | `sqlite:///./data/codebaseqa.db` |
+| `CHROMA_PERSIST_DIR` | Chroma storage path | `./data/chroma` |
+| `REPOS_DIR` | Cloned repository cache path | `./data/repos` |
+| `GITHUB_TOKEN` | Needed for private repos / higher API limits | unset |
+| `MAX_FILES_PER_REPO` | Indexing cap per repository | `5000` |
+| `MAX_FILE_SIZE_KB` | Skip files larger than this | `500` |
+| `DEBUG` | API debug mode | `false` |
 
-### Architecture Highlights
+### LLM & Embeddings
 
-1. **RAG Pipeline with Query Expansion**
-   - Expands user queries with synonyms and related terms
-   - Multi-query retrieval for better coverage
-   - LLM-based reranking for precision
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LLM_PROVIDER` | `openai`, `anthropic`, or `ollama` | `openai` |
+| `EMBEDDING_PROVIDER` | `openai` or `ollama` | `openai` |
+| `OPENAI_API_KEY` | OpenAI API key | unset |
+| `OPENAI_MODEL` | OpenAI chat model | `gpt-4o` |
+| `OPENAI_EMBEDDING_MODEL` | OpenAI embedding model | `text-embedding-3-small` |
+| `OPENAI_BASE_URL` | OpenAI-compatible endpoint override | unset |
+| `ANTHROPIC_API_KEY` | Anthropic API key | unset |
+| `ANTHROPIC_MODEL` | Anthropic model | `claude-sonnet-4-20250514` |
+| `OLLAMA_BASE_URL` | Ollama host URL | `http://localhost:11434` |
+| `OLLAMA_MODEL` | Ollama generation model | `llama3.1` |
+| `LOCAL_EMBEDDING_MODEL` | Ollama embedding model name | `nomic-ai/nomic-embed-text-v1.5` |
 
-2. **Semantic Code Parsing**
-   - Tree-sitter for AST-based chunking (not regex!)
-   - Preserves function/class boundaries
-   - Extracts docstrings and signatures
+Notes:
 
-3. **Hybrid Search Strategy**
-   - Vector similarity for semantic understanding
-   - Keyword matching for exact variable names
-   - Best of both worlds for code search
+- Docker compose currently passes `OPENAI_API_KEY` by default; if you want Anthropic/Ollama in Docker, add those env vars in `docker/docker-compose.yml`.
+- For local development, all variables above can be set directly in your shell or `.env`.
 
 ---
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/repos/` | POST | Index a GitHub repository |
-| `/api/repos/` | GET | List all repositories |
-| `/api/repos/{id}` | GET | Get repository details |
-| `/api/chat/sessions` | POST | Create a chat session |
-| `/api/chat/sessions/{id}/messages` | POST | Send message (streaming) |
-| `/api/search/` | POST | Semantic code search |
-| `/api/learning/{repo_id}/curriculum` | POST | Generate learning syllabus |
-| `/api/learning/{repo_id}/lessons/{id}` | POST | Generate lesson content |
+### Repository & Indexing
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/repos/` | Add repository and start background indexing |
+| `GET` | `/api/repos/` | List repositories |
+| `GET` | `/api/repos/{repo_id}` | Get repository details |
+| `GET` | `/api/repos/{repo_id}/progress` | Stream indexing progress (SSE) |
+| `DELETE` | `/api/repos/{repo_id}` | Delete repository and indexed data |
+| `GET` | `/api/repos/{repo_id}/files/content` | Fetch file content by `path` query param |
+| `POST` | `/api/repos/demo/seed` | Seed demo repository |
 
-## Configuration
+### Chat & Search
 
-All configuration via environment variables (`.env`):
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/chat/sessions` | Create chat session |
+| `GET` | `/api/chat/sessions/{session_id}` | Get session + messages |
+| `POST` | `/api/chat/sessions/{session_id}/messages` | Stream assistant response (SSE) |
+| `POST` | `/api/search/` | Hybrid semantic code search |
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OPENAI_API_KEY` | Your OpenAI API key | Yes |
-| `DATABASE_URL` | SQLite path | No (default: `sqlite:///./data/codebaseqa.db`) |
-| `CHROMA_PERSIST_DIRECTORY` | Vector store path | No (default: `./data/chroma`) |
-| `GITHUB_TOKEN` | For private repositories | No |
+### Learning, Graph, Gamification, Challenges
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/learning/personas` | List available personas |
+| `POST` | `/api/learning/{repo_id}/curriculum` | Generate syllabus |
+| `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}` | Generate lesson content |
+| `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}/quiz` | Generate quiz |
+| `GET` | `/api/learning/{repo_id}/lessons/{lesson_id}/export/codetour` | Export lesson as CodeTour |
+| `GET` | `/api/learning/{repo_id}/graph` | Generate dependency graph |
+| `GET` | `/api/learning/{repo_id}/stats` | User XP/level/streak stats |
+| `GET` | `/api/learning/{repo_id}/activity` | Activity heatmap data |
+| `GET` | `/api/learning/{repo_id}/achievements` | Achievement list + unlock status |
+| `GET` | `/api/learning/{repo_id}/progress` | Completed lessons |
+| `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}/complete` | Mark lesson complete + award XP |
+| `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}/quiz/result` | Submit quiz result + award XP |
+| `POST` | `/api/learning/{repo_id}/challenges/complete` | Record challenge completion + award XP |
+| `POST` | `/api/learning/{repo_id}/graph/viewed` | Record graph view event |
+| `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}/challenge` | Generate challenge |
+| `POST` | `/api/learning/{repo_id}/challenges/validate/bug_hunt` | Validate bug hunt answer |
+| `POST` | `/api/learning/{repo_id}/challenges/validate/code_trace` | Validate code trace answer |
+| `POST` | `/api/learning/{repo_id}/challenges/validate/fill_blank` | Validate fill-blank answer |
+
+### Platform Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Service health + dependency checks |
+| `GET` | `/openapi.json` | OpenAPI JSON |
+| `GET` | `/openapi.yaml` | OpenAPI YAML |
+| `GET` | `/api/cache/stats` | LLM cache statistics |
 
 ---
 
 ## CLI Usage
 
+Install:
+
 ```bash
-# Install CLI
-cd cli && pip install -e .
+cd cli
+pip install -e .
+```
 
-# Index a repository
+Commands:
+
+```bash
+# Index repository
 codebaseqa index https://github.com/expressjs/express
-
-# Ask a question
-codebaseqa ask <repo-id> "What is the main entry point?"
-
-# Search code
-codebaseqa search <repo-id> "authentication middleware"
 
 # List repositories
 codebaseqa list
 
-# Export lesson as CodeTour
-codebaseqa export-tour <repo-id> <lesson-id>
+# Ask a question
+codebaseqa ask <repo_id> "What is the main entry point?"
+
+# Search code
+codebaseqa search <repo_id> "authentication middleware"
+
+# List generated lessons (default persona: new_hire)
+codebaseqa lessons <repo_id>
+
+# Export lesson as VS Code CodeTour
+codebaseqa export-tour <repo_id> <lesson_id>
 ```
 
 ---
 
-## Limitations & Recommended Repos
+## Architecture (Monorepo)
 
-### Current Limitations
+```text
+codebaseqa/
+├── apps/
+│   ├── api/        # FastAPI backend (RAG, indexing, learning, gamification)
+│   └── web/        # Next.js frontend UI
+├── cli/            # Python CLI client
+├── docker/         # Dockerfiles + compose + entrypoint
+├── docs/           # Architecture and design notes
+└── scripts/        # Local helper scripts
+```
 
-This project is optimized for **small to medium repositories** (under 500 files). Large repos like React, Next.js, or FastAPI may:
-- Take a long time to index
-- Hit OpenAI API token limits
-- Use significant API credits
+Backend highlights:
 
-### Recommended Test Repositories
+- Tree-sitter semantic parsing for Python, JavaScript, TypeScript, Java
+- Hybrid retrieval (vector + keyword) and query expansion
+- LLM-based reranking for improved relevance
+- SQLite metadata + Chroma vector persistence
 
-| Repository | Files | Description |
-|------------|-------|-------------|
-| `tiangolo/sqlmodel` | ~50 | SQL + Pydantic models |
-| `pallets/click` | ~40 | CLI framework |
-| `encode/starlette` | ~80 | ASGI framework |
-| `psf/requests` | ~60 | HTTP library |
-| `expressjs/express` | ~100 | Node.js web framework |
+---
 
-### Future Improvements
+## Testing & Checks
 
-- [ ] **Smart file filtering** - Skip tests, docs, and examples
-- [ ] **Subdirectory indexing** - Only index `src/` or specific folders
-- [ ] **Incremental indexing** - Only re-index changed files
-- [ ] **File prioritization** - Focus on entry points and core modules
-- [ ] **Streaming embeddings** - Process in smaller batches for large repos
-- [ ] **Multiple LLM providers** - Support Anthropic, local models (Ollama)
+Backend:
+
+```bash
+cd apps/api
+pytest tests/unit tests/integration
+ruff check src tests
+```
+
+Frontend:
+
+```bash
+cd apps/web
+pnpm lint
+pnpm type-check
+pnpm test
+```
+
+Workspace shortcuts:
+
+```bash
+pnpm lint
+pnpm test
+pnpm type-check
+```
+
+---
+
+## Current Limitations
+
+- Very large repositories can still be slow/expensive to index depending on provider/model choice.
+- Lesson/challenge/graph generation quality depends on model capability and retrieved context.
+- Docker setup is optimized for OpenAI defaults unless extra provider vars are explicitly wired.
 
 ---
 
@@ -245,12 +296,4 @@ This project is optimized for **small to medium repositories** (under 500 files)
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**If you find this useful, please give it a star!**
-
-</div>
+MIT
