@@ -7,6 +7,7 @@ from typing import List
 
 import tiktoken
 from openai import AsyncOpenAI
+
 from src.core.embeddings.base import BaseEmbeddings
 
 

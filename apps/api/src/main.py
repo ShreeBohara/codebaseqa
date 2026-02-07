@@ -87,17 +87,18 @@ app.include_router(learning.router, prefix="/api/learning", tags=["learning"])
 @app.get("/health")
 async def health_check():
     """Comprehensive health check endpoint."""
-    from src.dependencies import get_db_engine, get_vector_store, get_llm_service
-    from src.config import settings
     import httpx
-    
+
+    from src.config import settings
+    from src.dependencies import get_db_engine, get_llm_service, get_vector_store
+
     checks = {
         "database": "ok",
         "vector_store": "ok",
         "llm_provider": "ok",
         "github_api": "ok"
     }
-    
+
     # Check database
     try:
         engine = get_db_engine()
@@ -105,7 +106,7 @@ async def health_check():
             conn.execute(text("SELECT 1"))
     except Exception as e:
         checks["database"] = f"error: {str(e)[:50]}"
-    
+
     # Check vector store
     try:
         vs = get_vector_store()
@@ -114,7 +115,7 @@ async def health_check():
              checks["vector_store"] = "not initialized"
     except Exception as e:
         checks["vector_store"] = f"error: {str(e)[:50]}"
-    
+
     # Check LLM provider
     try:
         llm = get_llm_service()
@@ -123,7 +124,7 @@ async def health_check():
             checks["llm_provider"] = "ok" if is_healthy else "unavailable/unreachable"
     except Exception as e:
         checks["llm_provider"] = f"error: {str(e)[:50]}"
-    
+
     # Check GitHub API rate limit
     try:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -143,9 +144,9 @@ async def health_check():
                 checks["github_api"] = f"error: status {response.status_code}"
     except Exception as e:
         checks["github_api"] = f"error: {str(e)[:50]}"
-    
+
     all_ok = all("ok" in str(v) for v in checks.values())
-    
+
     return {
         "status": "healthy" if all_ok else "degraded",
         "version": "0.2.0",
@@ -191,10 +192,11 @@ async def global_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+
     # Setup logging before run
     from src.core.logging import setup_logging
     setup_logging()
-    
+
     uvicorn.run(
         "src.main:app",
         host="0.0.0.0",

@@ -1,10 +1,13 @@
 import logging
+
 import structlog
+
 from src.config import settings
+
 
 def setup_logging():
     """Configure structured logging."""
-    
+
     # Configure structlog
     structlog.configure(
         processors=[
@@ -22,7 +25,7 @@ def setup_logging():
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
-    
+
     # Set log level
     log_level = logging.DEBUG if settings.debug else logging.INFO
     logging.basicConfig(

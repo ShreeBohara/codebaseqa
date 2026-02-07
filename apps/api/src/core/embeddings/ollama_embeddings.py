@@ -1,13 +1,15 @@
-import httpx
 import logging
 from typing import List
+
+import httpx
+
 from src.core.embeddings.base import BaseEmbeddings
 
 logger = logging.getLogger(__name__)
 
 class OllamaEmbeddings(BaseEmbeddings):
     """Ollama embedding service for local embeddings."""
-    
+
     # Model -> dimensions mapping
     # Note: These are defaults, ideally we'd fetch this from model info if possible
     MODEL_DIMENSIONS = {
@@ -17,7 +19,7 @@ class OllamaEmbeddings(BaseEmbeddings):
         "llama3": 4096,
         "llama3.1": 4096,
     }
-    
+
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
@@ -33,16 +35,23 @@ class OllamaEmbeddings(BaseEmbeddings):
         self._num_ctx = num_ctx
         self._fail_open = fail_open
         # Try to infer dimensions if model name contains typical hints, or defaulting
-    
+
     @property
     def dimensions(self) -> int:
         return self._dimensions
-    
+
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """Embed multiple texts one at a time (Ollama currently doesn't support batching well in all versions)."""
-        from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
         import asyncio
         import json
+
+        from tenacity import (
+            before_sleep_log,
+            retry,
+            retry_if_exception_type,
+            stop_after_attempt,
+            wait_exponential,
+        )
 
         @retry(
             stop=stop_after_attempt(10),  # Increased from 5
@@ -75,11 +84,11 @@ class OllamaEmbeddings(BaseEmbeddings):
                 f"{self._base_url}/api/embeddings",
                 json=request_data
             )
-            
+
             if response.status_code == 404:
                 logger.error(f"Model {self._model} not found in Ollama. Please run: ollama pull {self._model}")
                 raise httpx.HTTPStatusError("Model not found", request=response.request, response=response)
-            
+
             if response.status_code >= 500:
                 logger.error(f"Ollama Server Error ({response.status_code}): {response.text}")
 
@@ -105,14 +114,14 @@ class OllamaEmbeddings(BaseEmbeddings):
                     # Add delay to prevent overwhelming Ollama (increased to 0.1s)
                     if i > 0:
                         await asyncio.sleep(0.2)  # Increased from 0.05 to 0.2
-                        
+
                     emb = await _embed_one(client, val)
                     embeddings.append(emb)
-                    
+
                     # Log progress periodically
                     if (i + 1) % 10 == 0:
                          logger.debug(f"Embedded {i+1}/{total} chunks")
-                         
+
                 except Exception as e:
                     logger.error(f"Ollama embedding failed at index {i} (text length: {len(val)}): {e}")
                     if self._fail_open:
@@ -121,7 +130,7 @@ class OllamaEmbeddings(BaseEmbeddings):
                     raise
 
         return embeddings
-    
+
     async def embed_query(self, query: str) -> List[float]:
         """Embed single query."""
         try:

@@ -1,12 +1,13 @@
 from src.config import settings
 from src.core.embeddings.base import BaseEmbeddings
-from src.core.embeddings.openai_embeddings import OpenAIEmbeddings
 from src.core.embeddings.ollama_embeddings import OllamaEmbeddings
+from src.core.embeddings.openai_embeddings import OpenAIEmbeddings
+
 
 def create_embedding_service() -> BaseEmbeddings:
     """Factory function to create embedding service based on configuration."""
     provider = settings.embedding_provider.lower()
-    
+
     if provider == "openai":
         return OpenAIEmbeddings(
             api_key=settings.openai_api_key,

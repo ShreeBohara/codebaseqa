@@ -50,7 +50,7 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
             setLoadingFile(true);
             try {
                 const data = await api.getRepoFileContent(repoId, activeRef.file_path);
-                setFileContent(data.content);
+                setFileContent(data?.content ?? null);
             } catch (e) {
                 console.error('Failed to load file content:', e);
                 setFileContent(null);

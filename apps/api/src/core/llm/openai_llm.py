@@ -7,6 +7,7 @@ import logging
 from typing import AsyncGenerator, Dict, List
 
 from openai import AsyncOpenAI
+
 from src.core.llm.base import BaseLLM
 
 logger = logging.getLogger(__name__)
@@ -44,8 +45,8 @@ class OpenAILLM(BaseLLM):
         temperature: float | None = None,
     ) -> str:
         """Generate a response (non-streaming) with retry."""
-        from src.core.cache.llm_cache import get_llm_cache
         from src.config import settings
+        from src.core.cache.llm_cache import get_llm_cache
         cache = get_llm_cache()
 
         # Check cache first
@@ -70,11 +71,11 @@ class OpenAILLM(BaseLLM):
             return response.choices[0].message.content
 
         result = await self._retry_with_backoff(_call)
-        
+
         # Cache the result
         if use_cache:
             cache.set(messages, self._model, result)
-            
+
         return result
 
     async def generate_stream(

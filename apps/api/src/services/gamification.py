@@ -398,24 +398,24 @@ class GamificationService:
     def record_lesson_complete(self, repo_id: str, lesson_id: str, time_seconds: int) -> XPGain:
         """Record lesson completion and award XP."""
         from datetime import datetime
-        
+
         # Check if already completed (prevent double XP)
         existing = self._db.query(LessonProgress).filter(
             LessonProgress.repository_id == repo_id,
             LessonProgress.lesson_id == lesson_id,
             LessonProgress.status == "completed"
         ).first()
-        
+
         if existing:
             # Already completed, return 0 XP
             return XPGain(amount=0, reason="already_completed")
-        
+
         # Create or update lesson progress
         progress = self._db.query(LessonProgress).filter(
             LessonProgress.repository_id == repo_id,
             LessonProgress.lesson_id == lesson_id
         ).first()
-        
+
         if not progress:
             progress = LessonProgress(
                 repository_id=repo_id,
@@ -429,7 +429,7 @@ class GamificationService:
             progress.status = "completed"
             progress.completed_at = datetime.utcnow()
             progress.time_spent_seconds += time_seconds
-        
+
         # Update user XP stats
         user_xp = self.get_or_create_user_xp(repo_id)
         user_xp.lessons_completed += 1

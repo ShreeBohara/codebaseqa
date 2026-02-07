@@ -105,7 +105,7 @@ describe('LessonView', () => {
 
     it('loads and displays file content', async () => {
         const mockFileContent = 'print("Hello Python")'
-        vi.mocked(api.getRepoFileContent).mockResolvedValueOnce({ content: mockFileContent })
+        vi.mocked(api.getRepoFileContent).mockResolvedValue({ content: mockFileContent })
 
         render(
             <LessonView
@@ -119,7 +119,7 @@ describe('LessonView', () => {
             expect(api.getRepoFileContent).toHaveBeenCalledWith('repo-123', 'src/main.py')
         })
 
-        expect(screen.getByText('print("Hello Python")')).toBeInTheDocument()
+        expect(await screen.findByText('print("Hello Python")')).toBeInTheDocument()
     })
 
     it('handles quiz generation', async () => {

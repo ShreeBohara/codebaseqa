@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from src.dependencies import get_db, get_gamification_service, get_learning_service
 from src.models.codetour_schemas import CodeTour
 from src.models.learning import LessonContent, Persona, Syllabus
+from src.services.challenges import ChallengeService
 from src.services.gamification import GamificationService, UserStats
 from src.services.learning_service import LearningService
-from src.services.challenges import ChallengeService
 
 router = APIRouter(tags=["learning"])
 

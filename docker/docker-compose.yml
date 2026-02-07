@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - api
     restart: always
@@ -23,7 +23,7 @@ services:
       - ../data:/app/data
     environment:
       - DATABASE_URL=sqlite:///./data/codebaseqa.db
-      - CHROMA_PERSIST_DIRECTORY=./data/chroma
+      - CHROMA_PERSIST_DIR=./data/chroma
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SEED_DEMO=${SEED_DEMO:-false}
     restart: always

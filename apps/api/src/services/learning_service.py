@@ -6,20 +6,21 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
+from src.config import settings
 from src.core.llm.openai_llm import OpenAILLM
 from src.core.vectorstore.chroma_store import ChromaStore
-from src.config import settings
 from src.models.codetour_schemas import CodeTour, CodeTourStep
-from src.models.database import Repository, CodeFile
+from src.models.database import CodeFile, Repository
 from src.models.learning import (
+    CodeReference,
+    DependencyGraph,
+    GraphEdge,
+    GraphNode,
     Lesson,
     LessonContent,
     Module,
     Persona,
     Syllabus,
-    GraphNode,
-    GraphEdge,
-    DependencyGraph,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,9 +163,6 @@ Return clean JSON matching this structure:
 
     async def generate_lesson(self, repo_id: str, lesson_id: str, lesson_title: str) -> Optional[LessonContent]:
         """Generate detailed content for a specific lesson."""
-        from src.models.learning import CodeReference
-        from pathlib import Path
-
         # Code file extensions to include (exclude .md, .txt, etc.)
         CODE_EXTENSIONS = {
             '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go', '.java', '.c', '.cpp',
@@ -308,8 +306,6 @@ Return clean JSON:
 
     async def generate_graph(self, repo_id: str) -> Optional[object]:
         """Generate a comprehensive, high-quality dependency graph for the repository."""
-        from src.models.learning import DependencyGraph, GraphEdge, GraphNode
-
         repo = self._db.query(Repository).filter(Repository.id == repo_id).first()
         if not repo:
             logger.error(f"Repository {repo_id} not found for graph generation")
@@ -407,7 +403,7 @@ Return clean JSON:
 - "configures" = provides config/context to
 
 **NODE SELECTION PRIORITY**:
-1. Entry points (index, app, main, layout)  
+1. Entry points (index, app, main, layout)
 2. Shared components used by multiple files
 3. Utility/helper files imported by many
 4. API routes and data layers
@@ -586,14 +582,14 @@ REMEMBER: Dense, connected graph. No orphan nodes. At least 15 edges."""
         for e in edges:
             connected_ids.add(e.source)
             connected_ids.add(e.target)
-        
+
         filtered_nodes = [n for n in nodes if n.id in connected_ids]
-        
+
         # Log if we filtered any
         removed = len(nodes) - len(filtered_nodes)
         if removed > 0:
             logger.info(f"Filtered out {removed} orphan nodes")
-        
+
         return filtered_nodes, edges
 
     async def _generate_edges_only(self, nodes: List[GraphNode], summary_map: dict) -> List[GraphEdge]:
@@ -685,9 +681,14 @@ Aim for 10-25 edges.
         # Convert single-quoted keys/values to double quotes (best-effort)
         single_quoted = re.sub(r"{\s*'([^'\\]*(?:\\.[^'\\]*)*)'\s*:", r'{"\1":', with_commas)
         single_quoted = re.sub(r",\s*'([^'\\]*(?:\\.[^'\\]*)*)'\s*:", r',"\1":', single_quoted)
+
+        def _replace_single_quoted_value(match: re.Match[str]) -> str:
+            escaped = match.group(2).replace('"', '\\"')
+            return f'{match.group(1)}"{escaped}"'
+
         single_quoted = re.sub(
             r'(:\s*)\'([^\'\\]*(?:\\.[^\'\\]*)*)\'',
-            lambda m: f'{m.group(1)}"{m.group(2).replace(chr(34), r"\\\"")}"',
+            _replace_single_quoted_value,
             single_quoted
         )
         return single_quoted

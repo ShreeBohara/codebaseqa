@@ -1,19 +1,21 @@
-import httpx
 import json
 import logging
 from typing import AsyncGenerator, Dict, List
+
+import httpx
+
 from src.core.llm.base import BaseLLM
 
 logger = logging.getLogger(__name__)
 
 class OllamaLLM(BaseLLM):
     """Ollama LLM service for local model inference."""
-    
+
     def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.1"):
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = 120
-    
+
     async def generate(self, messages: List[Dict[str, str]], use_cache: bool = True, **kwargs) -> str:
         """Generate response using Ollama API."""
         from src.core.cache.llm_cache import get_llm_cache
@@ -33,11 +35,11 @@ class OllamaLLM(BaseLLM):
                 )
                 response.raise_for_status()
                 result = response.json()["message"]["content"]
-                
+
                 # Cache result
                 if use_cache:
                     cache.set(messages, self._model, result)
-                    
+
                 return result
         except Exception as e:
             logger.error(f"Ollama generation failed: {e}")
@@ -63,7 +65,7 @@ class OllamaLLM(BaseLLM):
         except Exception as e:
             logger.error(f"Ollama streaming failed: {e}")
             yield f"\n\n[Error: {str(e)[:100]}]"
-    
+
     async def health_check(self) -> bool:
         """Check Ollama availability."""
         try:
