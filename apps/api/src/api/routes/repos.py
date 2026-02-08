@@ -10,6 +10,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from src.core.demo_mode import (
+    assert_demo_repo_access,
+    assert_demo_repo_mutation_allowed,
+    get_demo_repository,
+    is_demo_mode,
+)
 from src.core.github.repo_manager import RepoManager
 from src.dependencies import get_db, get_session_factory, get_vector_store
 from src.models.database import IndexingStatus, Repository
@@ -53,6 +59,8 @@ async def create_repository(
     Add a new repository for indexing.
     Returns immediately, indexing happens in background.
     """
+    assert_demo_repo_mutation_allowed("import")
+
     # Parse GitHub URL
     repo_manager = RepoManager()
     owner, name = repo_manager.parse_github_url(str(repo.github_url))
@@ -108,6 +116,12 @@ async def list_repositories(
     db: Session = Depends(get_db),
 ):
     """List all indexed repositories."""
+    if is_demo_mode():
+        demo_repo = get_demo_repository(db)
+        if demo_repo:
+            return RepoListResponse(repositories=[demo_repo], total=1)
+        return RepoListResponse(repositories=[], total=0)
+
     query = db.query(Repository)
     total = query.count()
     repos = query.offset(skip).limit(limit).all()
@@ -121,6 +135,8 @@ async def get_repository(
     db: Session = Depends(get_db),
 ):
     """Get repository details."""
+    assert_demo_repo_access(db, repo_id)
+
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
 
     if not repo:
@@ -135,6 +151,8 @@ async def get_indexing_progress(
     db: Session = Depends(get_db),
 ):
     """Stream indexing progress updates via SSE."""
+    assert_demo_repo_access(db, repo_id)
+
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
 
     if not repo:
@@ -170,6 +188,9 @@ async def delete_repository(
     vector_store = Depends(get_vector_store),
 ):
     """Delete a repository and all associated data."""
+    assert_demo_repo_mutation_allowed("delete")
+    assert_demo_repo_access(db, repo_id)
+
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
 
     if not repo:
@@ -196,6 +217,8 @@ async def get_repo_file_content(
     db: Session = Depends(get_db),
 ):
     """Get content of a specific file."""
+    assert_demo_repo_access(db, repo_id)
+
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
 
     if not repo:

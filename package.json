@@ -13,6 +13,7 @@
     "web:build": "pnpm --filter web build",
     "web:start": "pnpm --filter web start",
     "web:verify-css": "node scripts/verify-web-css.mjs",
+    "demo:prewarm": "node scripts/prewarm-demo.mjs",
     "clean": "turbo clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },

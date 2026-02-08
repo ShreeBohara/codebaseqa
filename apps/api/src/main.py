@@ -10,9 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from src.api.routes import chat, learning, repos, search
+from src.api.routes import chat, learning, platform, repos, search
 from src.config import settings
-from src.dependencies import get_db_engine, get_vector_store
+from src.dependencies import get_db_engine, get_session_factory, get_vector_store
 from src.models.database import init_db
 
 # Configure logging
@@ -81,6 +81,7 @@ app.include_router(repos.router, prefix="/api/repos", tags=["repositories"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(learning.router, prefix="/api/learning", tags=["learning"])
+app.include_router(platform.router, prefix="/api/platform", tags=["platform"])
 
 
 # Health check endpoint
@@ -96,7 +97,8 @@ async def health_check():
         "database": "ok",
         "vector_store": "ok",
         "llm_provider": "ok",
-        "github_api": "ok"
+        "github_api": "ok",
+        "demo_repo": "ok" if not settings.demo_mode else "initializing",
     }
 
     # Check database
@@ -145,7 +147,29 @@ async def health_check():
     except Exception as e:
         checks["github_api"] = f"error: {str(e)[:50]}"
 
-    all_ok = all("ok" in str(v) for v in checks.values())
+    if settings.demo_mode:
+        from src.core.demo_mode import get_demo_repository
+
+        db = None
+        try:
+            SessionLocal = get_session_factory()
+            db = SessionLocal()
+            demo_repo = get_demo_repository(db)
+            if not demo_repo:
+                checks["demo_repo"] = "initializing"
+            else:
+                checks["demo_repo"] = f"{demo_repo.status} ({demo_repo.github_owner}/{demo_repo.github_name})"
+        except Exception as e:
+            checks["demo_repo"] = f"error: {str(e)[:50]}"
+        finally:
+            if db is not None:
+                db.close()
+
+    critical_ok = all("error" not in str(v) for k, v in checks.items() if k != "demo_repo")
+    demo_ready = True
+    if settings.demo_mode:
+        demo_ready = str(checks["demo_repo"]).startswith("completed")
+    all_ok = critical_ok and demo_ready
 
     return {
         "status": "healthy" if all_ok else "degraded",

@@ -6,7 +6,7 @@ Usage:
     python -m src.demo.seed_demo
 
 This script:
-1. Adds a small demo repository (httpie/cli - a popular, small Python project)
+1. Adds a configured demo repository (defaults to fastapi/fastapi)
 2. Triggers indexing
 3. Waits for completion (optional)
 """
@@ -33,14 +33,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Demo repository - small, well-documented, popular
-# Using tiangolo/sqlmodel - small, modern, well-documented (~50 files)
+# Demo repository defaults.
+# Values can be overridden via environment variables:
+#   DEMO_REPO_URL, DEMO_REPO_OWNER, DEMO_REPO_NAME, DEMO_REPO_BRANCH
 DEMO_REPO = {
-    "github_url": "https://github.com/tiangolo/sqlmodel",
-    "owner": "tiangolo",
-    "name": "sqlmodel",
-    "branch": "main",
-    "description": "SQLModel - SQL databases in Python with type hints",
+    "github_url": settings.demo_repo_url,
+    "owner": settings.demo_repo_owner,
+    "name": settings.demo_repo_name,
+    "branch": settings.demo_repo_branch,
+    "description": f"{settings.demo_repo_owner}/{settings.demo_repo_name} - featured live demo repository",
 }
 
 

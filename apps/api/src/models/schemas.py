@@ -63,6 +63,18 @@ class RepoListResponse(BaseModel):
     total: int
 
 
+class PlatformConfigResponse(BaseModel):
+    """Runtime platform configuration for frontend behavior toggles."""
+
+    demo_mode: bool
+    demo_repo_id: Optional[str] = None
+    demo_repo_full_name: str
+    demo_repo_url: str
+    demo_banner_text: str
+    allow_public_imports: bool = False
+    busy_mode: bool = False
+
+
 class IndexingProgress(BaseModel):
     """Real-time indexing progress update."""
     repo_id: str

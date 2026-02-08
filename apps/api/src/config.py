@@ -6,6 +6,7 @@ Designed for easy self-hosting with sensible defaults.
 from functools import lru_cache
 from typing import List, Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -87,6 +88,48 @@ class Settings(BaseSettings):
 
     # OpenAI-compatible client defaults (LM Studio)
     openai_timeout_seconds: int = 120
+
+    # Demo mode controls
+    demo_mode: bool = False
+    demo_repo_url: str = "https://github.com/fastapi/fastapi"
+    demo_repo_owner: str = "fastapi"
+    demo_repo_name: str = "fastapi"
+    demo_repo_branch: str = "master"
+    demo_allow_public_imports: bool = False
+    demo_banner_text: str = (
+        "Live demo mode: this deployment is pinned to one featured repository. "
+        "For your own repository, self-host with your API key."
+    )
+    demo_busy_mode: bool = False
+
+    # Demo soft guardrails
+    demo_rate_limit_enabled: bool = True
+    demo_rate_limit_cooldown_seconds: int = 30
+    demo_chat_requests: int = 18
+    demo_chat_window_seconds: int = 60
+    demo_curriculum_requests: int = 6
+    demo_curriculum_window_seconds: int = 60
+    demo_lesson_requests: int = 8
+    demo_lesson_window_seconds: int = 60
+    demo_graph_requests: int = 5
+    demo_graph_window_seconds: int = 60
+    demo_challenge_requests: int = 10
+    demo_challenge_window_seconds: int = 60
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value):
+        """
+        Accept JSON lists or comma-separated strings for CORS_ORIGINS.
+        """
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                return value
+            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
+        return value
 
     model_config = SettingsConfigDict(
         env_file=".env",

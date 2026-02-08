@@ -4,10 +4,12 @@ Chat endpoints with SSE streaming support.
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from src.core.demo_mode import assert_demo_repo_access
+from src.core.rate_limit import enforce_demo_soft_limit
 from src.core.rag.pipeline import RAGPipeline
 from src.dependencies import get_db, get_llm_service, get_vector_store
 from src.models.database import ChatMessage, ChatSession, Repository
@@ -27,6 +29,8 @@ async def create_session(
     db: Session = Depends(get_db),
 ):
     """Create a new chat session for a repository."""
+    assert_demo_repo_access(db, data.repo_id)
+
     repo = db.query(Repository).filter(Repository.id == data.repo_id).first()
 
     if not repo:
@@ -57,6 +61,7 @@ async def get_session(
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    assert_demo_repo_access(db, session.repository_id)
 
     messages = [
         ChatMessageResponse(
@@ -83,6 +88,7 @@ async def get_session(
 async def send_message(
     session_id: str,
     message: ChatMessageCreate,
+    request: Request,
     db: Session = Depends(get_db),
     llm_service = Depends(get_llm_service),
     vector_store = Depends(get_vector_store),
@@ -92,6 +98,8 @@ async def send_message(
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    assert_demo_repo_access(db, session.repository_id)
+    enforce_demo_soft_limit(request, "chat")
 
     # Save user message
     user_msg = ChatMessage(session_id=session_id, role="user", content=message.content)

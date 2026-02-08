@@ -7,6 +7,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from src.core.demo_mode import assert_demo_repo_access
 from src.dependencies import get_db, get_vector_store
 from src.models.database import Repository
 from src.models.schemas import ChunkType, SearchQuery, SearchResponse, SearchResult
@@ -27,6 +28,7 @@ async def search_code(
     repo = db.query(Repository).filter(Repository.id == query.repo_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    assert_demo_repo_access(db, query.repo_id)
 
     # Get query embedding
     embedding_service = vector_store._embedding_service

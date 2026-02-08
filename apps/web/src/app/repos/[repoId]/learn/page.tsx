@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Loader2, Network, X } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, Loader2, Network, X } from 'lucide-react';
 import { api, Persona, Syllabus, LessonContent, UserStats, Achievement } from '@/lib/api-client';
 import { PersonaSelector } from '@/components/learning/persona-selector';
 import { SyllabusView } from '@/components/learning/syllabus-view';
@@ -13,7 +13,7 @@ import { XPWidget } from '@/components/learning/XPWidget';
 import { AchievementsPanel, AchievementToast } from '@/components/learning/AchievementsPanel';
 import { XPGainPopup } from '@/components/learning/XPBar';
 import { DashboardView } from '@/components/dashboard/dashboard-view';
-import { LayoutDashboard } from 'lucide-react';
+import { DemoBanner } from '@/components/common/demo-banner';
 
 interface LearnPageProps {
     params: Promise<{ repoId: string }>;
@@ -193,6 +193,7 @@ export default function LearnPage({ params }: LearnPageProps) {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200">
+            <DemoBanner />
             {/* XP Gain Popup */}
             <AnimatePresence>
                 {xpPopup && (

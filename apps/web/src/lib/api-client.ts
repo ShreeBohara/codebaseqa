@@ -238,11 +238,72 @@ export interface ChallengeResult {
   stats?: UserStats;
 }
 
+export interface PlatformConfig {
+  demo_mode: boolean;
+  demo_repo_id?: string | null;
+  demo_repo_full_name: string;
+  demo_repo_url: string;
+  demo_banner_text: string;
+  allow_public_imports: boolean;
+  busy_mode: boolean;
+}
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  retryAfterSeconds?: number;
+
+  constructor(message: string, status: number, code?: string, retryAfterSeconds?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
 
   constructor() {
     this.baseUrl = API_URL;
+  }
+
+  private async toApiError(res: Response, fallbackMessage: string): Promise<ApiError> {
+    const retryAfterHeader = res.headers.get('Retry-After');
+    const retryAfter = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
+
+    try {
+      const payload = await res.json();
+      if (payload?.detail && typeof payload.detail === 'object') {
+        return new ApiError(
+          payload.detail.message || fallbackMessage,
+          res.status,
+          payload.detail.code,
+          payload.detail.retry_after_seconds ?? retryAfter,
+        );
+      }
+
+      if (payload?.detail && typeof payload.detail === 'string') {
+        return new ApiError(payload.detail, res.status, undefined, retryAfter);
+      }
+    } catch {
+      // Fall back to text parsing below.
+    }
+
+    try {
+      const text = await res.text();
+      const clean = text.trim();
+      return new ApiError(clean || fallbackMessage, res.status, undefined, retryAfter);
+    } catch {
+      return new ApiError(fallbackMessage, res.status, undefined, retryAfter);
+    }
+  }
+
+  private async ensureOk(res: Response, fallbackMessage: string): Promise<void> {
+    if (!res.ok) {
+      throw await this.toApiError(res, fallbackMessage);
+    }
   }
 
   // Repository endpoints
@@ -252,19 +313,19 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ github_url: githubUrl, branch }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to import repository');
     return res.json();
   }
 
   async listRepos(): Promise<{ repositories: Repository[]; total: number }> {
     const res = await fetch(`${this.baseUrl}/api/repos/`);
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to fetch repositories');
     return res.json();
   }
 
   async getRepo(repoId: string): Promise<Repository> {
     const res = await fetch(`${this.baseUrl}/api/repos/${repoId}`);
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to fetch repository');
     return res.json();
   }
 
@@ -272,7 +333,7 @@ class ApiClient {
     // Sanitize path: remove leading @/ or similar aliases that LLMs might hallucinate
     const sanitizedPath = path.replace(/^@\//, 'src/').replace(/^~\//, '');
     const res = await fetch(`${this.baseUrl}/api/repos/${repoId}/files/content?path=${encodeURIComponent(sanitizedPath)}`);
-    if (!res.ok) throw new Error('Failed to fetch file content');
+    await this.ensureOk(res, 'Failed to fetch file content');
     return res.json();
   }
 
@@ -280,14 +341,20 @@ class ApiClient {
     const res = await fetch(`${this.baseUrl}/api/repos/${repoId}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to delete repository');
   }
 
   async seedDemo(): Promise<{ status: string; repo_id: string; message: string }> {
     const res = await fetch(`${this.baseUrl}/api/repos/demo/seed`, {
       method: 'POST',
     });
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to seed demo repository');
+    return res.json();
+  }
+
+  async getPlatformConfig(): Promise<PlatformConfig> {
+    const res = await fetch(`${this.baseUrl}/api/platform/config`);
+    await this.ensureOk(res, 'Failed to load platform configuration');
     return res.json();
   }
 
@@ -298,13 +365,13 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_id: repoId }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to create chat session');
     return res.json();
   }
 
   async getSession(sessionId: string): Promise<ChatSession> {
     const res = await fetch(`${this.baseUrl}/api/chat/sessions/${sessionId}`);
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Failed to fetch chat session');
     return res.json();
   }
 
@@ -315,9 +382,7 @@ class ApiClient {
       body: JSON.stringify({ content }),
     });
 
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
+    await this.ensureOk(res, 'Failed to send chat message');
 
     const reader = res.body?.getReader();
     const decoder = new TextDecoder();
@@ -356,14 +421,14 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_id: repoId, query, limit }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    await this.ensureOk(res, 'Search request failed');
     return res.json();
   }
 
   // Learning endpoints
   async getPersonas(): Promise<Persona[]> {
     const res = await fetch(`${this.baseUrl}/api/learning/personas`);
-    if (!res.ok) throw new Error('Failed to fetch personas');
+    await this.ensureOk(res, 'Failed to fetch personas');
     return res.json();
   }
 
@@ -373,7 +438,7 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ persona }),
     });
-    if (!res.ok) throw new Error('Failed to generate syllabus');
+    await this.ensureOk(res, 'Failed to generate syllabus');
     return res.json();
   }
 
@@ -383,7 +448,7 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title }),
     });
-    if (!res.ok) throw new Error('Failed to generate lesson content');
+    await this.ensureOk(res, 'Failed to generate lesson content');
     return res.json();
   }
 
@@ -393,32 +458,32 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ context_content: contextContent }),
     });
-    if (!res.ok) throw new Error('Failed to generate quiz');
+    await this.ensureOk(res, 'Failed to generate quiz');
     return res.json();
   }
 
   async getDependencyGraph(repoId: string): Promise<DependencyGraph> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph`);
-    if (!res.ok) throw new Error('Failed to generate graph');
+    await this.ensureOk(res, 'Failed to generate graph');
     return res.json();
   }
 
   // Gamification endpoints
   async getUserStats(repoId: string): Promise<UserStats> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/stats`);
-    if (!res.ok) throw new Error('Failed to fetch user stats');
+    await this.ensureOk(res, 'Failed to fetch user stats');
     return res.json();
   }
 
   async getAchievements(repoId: string): Promise<Achievement[]> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/achievements`);
-    if (!res.ok) throw new Error('Failed to fetch achievements');
+    await this.ensureOk(res, 'Failed to fetch achievements');
     return res.json();
   }
 
   async getCompletedLessons(repoId: string): Promise<string[]> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/progress`);
-    if (!res.ok) throw new Error('Failed to fetch lesson progress');
+    await this.ensureOk(res, 'Failed to fetch lesson progress');
     const data = await res.json();
     return data.completed_lessons || [];
   }
@@ -429,7 +494,7 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ time_spent_seconds: timeSpentSeconds }),
     });
-    if (!res.ok) throw new Error('Failed to complete lesson');
+    await this.ensureOk(res, 'Failed to complete lesson');
     return res.json();
   }
 
@@ -439,7 +504,7 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ score }),
     });
-    if (!res.ok) throw new Error('Failed to submit quiz result');
+    await this.ensureOk(res, 'Failed to submit quiz result');
     return res.json();
   }
 
@@ -447,7 +512,7 @@ class ApiClient {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph/viewed`, {
       method: 'POST',
     });
-    if (!res.ok) throw new Error('Failed to record graph view');
+    await this.ensureOk(res, 'Failed to record graph view');
     return res.json();
   }
 
@@ -458,7 +523,7 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challenge_type: challengeType, context }),
     });
-    if (!res.ok) throw new Error('Failed to generate challenge');
+    await this.ensureOk(res, 'Failed to generate challenge');
     return res.json();
   }
 
@@ -481,19 +546,19 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error('Failed to validate challenge');
+    await this.ensureOk(res, 'Failed to validate challenge');
     return res.json();
   }
 
   async exportCodeTour(repoId: string, lessonId: string): Promise<CodeTour> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/export/codetour`);
-    if (!res.ok) throw new Error('Failed to export CodeTour');
+    await this.ensureOk(res, 'Failed to export CodeTour');
     return res.json();
   }
 
   async getUserActivity(repoId: string): Promise<Record<string, number>> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/activity`);
-    if (!res.ok) throw new Error('Failed to load activity');
+    await this.ensureOk(res, 'Failed to load activity');
     return res.json();
   }
 }

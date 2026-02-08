@@ -4,18 +4,24 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Code2 } from 'lucide-react';
 import { RepoList } from '@/components/repos/repo-list';
-import { api, Repository } from '@/lib/api-client';
+import { PlatformConfig, api, Repository } from '@/lib/api-client';
 import { useEffect, useState } from 'react';
+import { DemoBanner } from '@/components/common/demo-banner';
 
 export default function ReposPage() {
     const [repos, setRepos] = useState<Repository[]>([]);
+    const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function fetchRepos() {
             try {
-                const data = await api.listRepos();
+                const [data, config] = await Promise.all([
+                    api.listRepos(),
+                    api.getPlatformConfig().catch(() => null),
+                ]);
                 setRepos(data.repositories);
+                setPlatformConfig(config);
             } catch (error) {
                 console.error('Failed to fetch repos:', error);
             } finally {
@@ -39,12 +45,14 @@ export default function ReposPage() {
 
                     <div className="flex items-center gap-4">
                         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 text-xs text-zinc-400">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            System Normal
+                            <span className={`w-2 h-2 rounded-full ${platformConfig?.busy_mode ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
+                            {platformConfig?.busy_mode ? 'Demo Busy Mode' : 'System Normal'}
                         </div>
                     </div>
                 </div>
             </nav>
+
+            <DemoBanner platformConfig={platformConfig} className="mt-[73px]" />
 
             {/* Content */}
             <main className="max-w-5xl mx-auto px-6 pt-32 pb-10">
@@ -64,7 +72,7 @@ export default function ReposPage() {
                         <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
                     </div>
                 ) : (
-                    <RepoList initialRepos={repos} />
+                    <RepoList initialRepos={repos} platformConfig={platformConfig} />
                 )}
             </main>
         </div>

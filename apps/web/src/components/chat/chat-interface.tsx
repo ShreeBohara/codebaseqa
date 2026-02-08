@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api, ChatMessage } from '@/lib/api-client';
+import { ApiError, api, ChatMessage } from '@/lib/api-client';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
@@ -90,7 +90,22 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                 }
             }
         } catch (error) {
-            setMessages((prev) => prev.map((m) => m.id === assistantMessage.id ? { ...m, content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, isStreaming: false } : m));
+            const message = (() => {
+                if (error instanceof ApiError) {
+                    if (error.status === 429) {
+                        const retry = error.retryAfterSeconds ? ` Retry in ~${error.retryAfterSeconds}s.` : '';
+                        return `Demo rate limit reached.${retry}`;
+                    }
+                    if (error.status === 503) {
+                        return error.message || 'Demo is temporarily busy. Please retry shortly.';
+                    }
+                    return error.message;
+                }
+                return error instanceof Error ? error.message : 'Unknown error';
+            })();
+            setMessages((prev) =>
+                prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: `Error: ${message}`, isStreaming: false } : m))
+            );
         } finally {
             setIsLoading(false);
         }

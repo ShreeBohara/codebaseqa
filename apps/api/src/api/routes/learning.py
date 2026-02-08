@@ -1,9 +1,11 @@
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from src.core.demo_mode import assert_demo_repo_access
+from src.core.rate_limit import enforce_demo_soft_limit
 from src.dependencies import get_db, get_gamification_service, get_learning_service
 from src.models.codetour_schemas import CodeTour
 from src.models.learning import LessonContent, Persona, Syllabus
@@ -12,6 +14,14 @@ from src.services.gamification import GamificationService, UserStats
 from src.services.learning_service import LearningService
 
 router = APIRouter(tags=["learning"])
+
+
+def _assert_learning_repo_access(service: LearningService, repo_id: str) -> None:
+    assert_demo_repo_access(service._db, repo_id)
+
+
+def _assert_db_repo_access(db: Session, repo_id: str) -> None:
+    assert_demo_repo_access(db, repo_id)
 
 class GenerateCurriculumRequest(BaseModel):
     persona: str
@@ -27,9 +37,12 @@ async def get_personas(
 async def generate_curriculum(
     repo_id: str,
     request: GenerateCurriculumRequest,
+    http_request: Request,
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate a personalized learning curriculum for a repository."""
+    _assert_learning_repo_access(service, repo_id)
+    enforce_demo_soft_limit(http_request, "curriculum")
     try:
         return await service.generate_curriculum(repo_id, request.persona)
     except Exception as e:
@@ -43,9 +56,12 @@ async def generate_lesson(
     repo_id: str,
     lesson_id: str,
     request: GenerateLessonRequest,
+    http_request: Request,
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate content for a specific lesson."""
+    _assert_learning_repo_access(service, repo_id)
+    enforce_demo_soft_limit(http_request, "lesson")
     try:
         content = await service.generate_lesson(repo_id, lesson_id, request.title)
         if not content:
@@ -65,6 +81,7 @@ async def generate_quiz(
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate a quiz for a lesson."""
+    _assert_learning_repo_access(service, repo_id)
     try:
         quiz = await service.generate_quiz(repo_id, lesson_id, request.context_content)
         if not quiz:
@@ -80,6 +97,7 @@ async def export_codetour(
     service: LearningService = Depends(get_learning_service)
 ):
     """Export a lesson as a VS Code CodeTour file (.tour)."""
+    _assert_learning_repo_access(service, repo_id)
     try:
         tour = await service.export_lesson_to_codetour(repo_id, lesson_id)
         if not tour:
@@ -91,9 +109,12 @@ async def export_codetour(
 @router.get("/{repo_id}/graph")
 async def generate_graph(
     repo_id: str,
+    http_request: Request,
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate repository dependency graph."""
+    _assert_learning_repo_access(service, repo_id)
+    enforce_demo_soft_limit(http_request, "graph")
     try:
         graph = await service.generate_graph(repo_id)
         if not graph:
@@ -113,6 +134,7 @@ async def get_user_stats(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Get user XP, level, streak, and statistics."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         return service.get_user_stats(repo_id)
     except Exception as e:
@@ -125,6 +147,7 @@ async def get_user_activity(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Get user activity history for heatmap."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         return service.get_activity_history(repo_id)
     except Exception as e:
@@ -137,6 +160,7 @@ async def get_achievements(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Get all achievements with unlock status."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         return service.get_all_achievements(repo_id)
     except Exception as e:
@@ -149,6 +173,7 @@ async def get_lesson_progress(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Get list of completed lesson IDs."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         completed = service.get_completed_lessons(repo_id)
         return {"completed_lessons": completed}
@@ -168,6 +193,7 @@ async def complete_lesson(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Mark a lesson as complete and award XP."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         xp_gain = service.record_lesson_complete(repo_id, lesson_id, request.time_spent_seconds)
         stats = service.get_user_stats(repo_id)
@@ -191,6 +217,7 @@ async def submit_quiz_result(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Submit quiz result and award XP based on score."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         xp_gain = service.record_quiz_complete(repo_id, lesson_id, request.score)
         stats = service.get_user_stats(repo_id)
@@ -219,6 +246,7 @@ async def complete_challenge(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Record challenge completion and award XP."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         xp_gain = service.record_challenge_complete(repo_id, request.used_hint)
         stats = service.get_user_stats(repo_id)
@@ -237,6 +265,7 @@ async def record_graph_view(
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Record graph view for achievements."""
+    _assert_db_repo_access(service._db, repo_id)
     try:
         achievement = service.unlock_achievement(repo_id, "graph_first_view")
         if achievement:
@@ -264,10 +293,13 @@ async def generate_challenge(
     repo_id: str,
     lesson_id: str,
     request: GenerateChallengeRequest,
+    http_request: Request,
     learning_service: LearningService = Depends(get_learning_service),
     db: Session = Depends(get_db),
 ):
     """Generate an interactive challenge for a lesson."""
+    _assert_db_repo_access(db, repo_id)
+    enforce_demo_soft_limit(http_request, "challenge")
     try:
         # Create challenge service with LLM from learning service
         challenge_service = ChallengeService(db, learning_service._llm)
@@ -298,6 +330,7 @@ async def validate_bug_hunt(
     db: Session = Depends(get_db),
 ):
     """Validate a bug hunt challenge answer."""
+    _assert_db_repo_access(db, repo_id)
     try:
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_bug_hunt(request.challenge, request.selected_line)
@@ -328,6 +361,7 @@ async def validate_code_trace(
     db: Session = Depends(get_db),
 ):
     """Validate a code trace challenge answer."""
+    _assert_db_repo_access(db, repo_id)
     try:
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_code_trace(request.challenge, request.selected_index)
@@ -358,6 +392,7 @@ async def validate_fill_blank(
     db: Session = Depends(get_db),
 ):
     """Validate a fill in the blank challenge answer."""
+    _assert_db_repo_access(db, repo_id)
     try:
         challenge_service = ChallengeService(db)
         result = challenge_service.validate_fill_blank(request.challenge, request.answers)

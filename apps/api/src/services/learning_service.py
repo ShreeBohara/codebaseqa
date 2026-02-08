@@ -449,7 +449,7 @@ REMEMBER: Dense, connected graph. No orphan nodes. At least 15 edges."""
             max_tokens=settings.graph_max_tokens,
             timeout=settings.graph_llm_timeout_seconds,
             temperature=0.1,
-            use_cache=False,
+            use_cache=settings.demo_mode,
         )
 
         try:
@@ -482,7 +482,7 @@ REMEMBER: Dense, connected graph. No orphan nodes. At least 15 edges."""
                         max_tokens=settings.graph_max_tokens,
                         timeout=settings.graph_llm_timeout_seconds,
                         temperature=0.0,
-                        use_cache=False,
+                        use_cache=settings.demo_mode,
                     )
                     fixed_cleaned = self._extract_json_block(fixed)
                     fixed_repaired = self._repair_json_like(fixed_cleaned)
@@ -635,7 +635,7 @@ Aim for 10-25 edges.
             max_tokens=settings.graph_edge_max_tokens,
             timeout=settings.graph_llm_timeout_seconds,
             temperature=0.0,
-            use_cache=False,
+            use_cache=settings.demo_mode,
         )
 
         try:

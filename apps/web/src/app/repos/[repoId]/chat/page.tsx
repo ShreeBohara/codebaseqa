@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Code2, ArrowLeft } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { ChatInterface } from '@/components/chat/chat-interface';
+import { DemoBanner } from '@/components/common/demo-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,8 @@ export default async function ChatPage({ params }: ChatPageProps) {
                     </div>
                 </div>
             </header>
+
+            <DemoBanner />
 
             {/* Chat Interface */}
             <div className="flex-1 overflow-hidden">

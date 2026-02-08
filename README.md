@@ -113,6 +113,38 @@ Use `pnpm web:dev` as the canonical frontend start command.
 
 ---
 
+## Live Demo Mode
+
+CodebaseQA supports a public-safe runtime mode for hosted demos.
+
+- Set `DEMO_MODE=true` to pin the deployment to one featured repository.
+- Default featured repository is `fastapi/fastapi` (configurable with `DEMO_REPO_*` env vars).
+- In demo mode, repo import/delete can be disabled, and chat/learning endpoints apply soft rate limits.
+- Frontend automatically shows a demo banner and hides destructive repo actions.
+
+Key env vars:
+
+- `DEMO_MODE`, `SEED_DEMO`
+- `DEMO_REPO_URL`, `DEMO_REPO_OWNER`, `DEMO_REPO_NAME`, `DEMO_REPO_BRANCH`
+- `DEMO_ALLOW_PUBLIC_IMPORTS`, `DEMO_BANNER_TEXT`, `DEMO_BUSY_MODE`
+- `DEMO_RATE_LIMIT_*` knobs for soft guardrails
+
+For local validation:
+
+```bash
+pnpm web:dev
+# in another terminal
+cd apps/api && uvicorn src.main:app --reload
+```
+
+For production prewarm after first deploy:
+
+```bash
+pnpm demo:prewarm
+```
+
+---
+
 ## Configuration
 
 CodebaseQA reads settings from environment variables (via `apps/api/src/config.py`).
@@ -206,6 +238,7 @@ Notes:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `GET` | `/api/platform/config` | Runtime demo flags for frontend behavior |
 | `GET` | `/health` | Service health + dependency checks |
 | `GET` | `/openapi.json` | OpenAPI JSON |
 | `GET` | `/openapi.yaml` | OpenAPI YAML |

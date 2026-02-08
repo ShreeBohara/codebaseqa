@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Code2 } from 'lucide-react';
 import { HeroSection } from '@/components/home/hero-section';
 import { BentoGrid } from '@/components/home/bento-grid';
+import { DemoBanner } from '@/components/common/demo-banner';
 
 export default function Home() {
   return (
@@ -34,6 +35,7 @@ export default function Home() {
           </div>
         </div>
       </nav>
+      <DemoBanner className="mt-[73px]" />
 
       {/* Hero */}
       <HeroSection />
