@@ -86,9 +86,10 @@ describe('LessonView', () => {
         vi.clearAllMocks()
         // Mock scrollIntoView since JSDOM doesn't support it
         window.HTMLElement.prototype.scrollIntoView = vi.fn()
+        vi.mocked(api.getRepoFileContent).mockResolvedValue({ content: '' })
     })
 
-    it('renders lesson title and content', () => {
+    it('renders lesson title and content', async () => {
         render(
             <LessonView
                 repoId="repo-123"
@@ -101,6 +102,10 @@ describe('LessonView', () => {
         expect(screen.getByText('Test Lesson')).toBeInTheDocument()
         expect(screen.getByText('Hello World')).toBeInTheDocument()
         expect(screen.getByText('This is a test lesson.')).toBeInTheDocument()
+
+        await waitFor(() => {
+            expect(api.getRepoFileContent).toHaveBeenCalledWith('repo-123', 'src/main.py')
+        })
     })
 
     it('loads and displays file content', async () => {

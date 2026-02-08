@@ -2,7 +2,6 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, Repository } from '@/lib/api-client';
 import {
@@ -17,7 +16,6 @@ interface RepoCardProps {
 }
 
 function RepoCard({ repo, onDelete }: RepoCardProps) {
-    const router = useRouter();
     const [isDeleting, setIsDeleting] = useState(false);
 
     const handleDelete = async (e: React.MouseEvent) => {
@@ -45,6 +43,10 @@ function RepoCard({ repo, onDelete }: RepoCardProps) {
 
     const status = statusConfig[repo.status] || statusConfig.pending;
     const isReady = repo.status === 'completed';
+    const statusHelpText: Partial<Record<Repository['status'], string>> = {
+        embedding: 'Embedding can hit provider rate limits (HTTP 429). Retries are automatic and indexing will continue.',
+    };
+    const helpText = statusHelpText[repo.status];
 
     return (
         <motion.div
@@ -114,6 +116,13 @@ function RepoCard({ repo, onDelete }: RepoCardProps) {
                     <span className="text-xs font-medium">Graph</span>
                 </Link>
             </div>
+
+            {helpText && (
+                <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 flex items-start gap-2">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-300" />
+                    <span>{helpText}</span>
+                </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between text-xs text-zinc-500 pt-4 border-t border-white/5">

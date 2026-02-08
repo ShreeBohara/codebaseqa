@@ -68,5 +68,11 @@ jobs:
     - name: Type Check
       run: pnpm --filter web type-check
 
+    - name: Build
+      run: pnpm --filter web build
+
+    - name: Verify Compiled CSS
+      run: pnpm web:verify-css
+
     - name: Run Tests
       run: pnpm --filter web test

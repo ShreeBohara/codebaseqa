@@ -9,6 +9,10 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "type-check": "turbo type-check",
+    "web:dev": "pnpm --filter web dev",
+    "web:build": "pnpm --filter web build",
+    "web:start": "pnpm --filter web start",
+    "web:verify-css": "node scripts/verify-web-css.mjs",
     "clean": "turbo clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
@@ -17,7 +21,9 @@
   "license": "MIT",
   "packageManager": "pnpm@10.28.2",
   "devDependencies": {
+    "@tailwindcss/postcss": "^4",
     "prettier": "^3.2.0",
+    "tailwindcss": "^4",
     "turbo": "^2.8.1",
     "typescript": "^5.4.0"
   },

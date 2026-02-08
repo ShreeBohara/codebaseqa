@@ -1,7 +1,7 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Flame, TrendingUp, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Flame, Zap } from 'lucide-react';
 
 interface XPBarProps {
     totalXP: number;

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { Code2 } from 'lucide-react';
 import { HeroSection } from '@/components/home/hero-section';
 import { BentoGrid } from '@/components/home/bento-grid';

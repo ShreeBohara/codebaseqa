@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Loader2, Network, X } from 'lucide-react';
-import { api, Repository, Persona, Syllabus, LessonContent, UserStats, Achievement } from '@/lib/api-client';
+import { api, Persona, Syllabus, LessonContent, UserStats, Achievement } from '@/lib/api-client';
 import { PersonaSelector } from '@/components/learning/persona-selector';
 import { SyllabusView } from '@/components/learning/syllabus-view';
 import { LessonView } from '@/components/learning/lesson-view';
@@ -21,7 +21,6 @@ interface LearnPageProps {
 
 export default function LearnPage({ params }: LearnPageProps) {
     const [repoId, setRepoId] = useState<string>('');
-    const [repo, setRepo] = useState<Repository | null>(null);
     const [loading, setLoading] = useState(true);
 
     // State for learning flow
@@ -57,11 +56,10 @@ export default function LearnPage({ params }: LearnPageProps) {
             setRepoId(resolvedParams.repoId);
 
             try {
-                const [repoData, personasData] = await Promise.all([
+                const [, personasData] = await Promise.all([
                     api.getRepo(resolvedParams.repoId),
                     api.getPersonas()
                 ]);
-                setRepo(repoData);
                 setPersonas(personasData);
 
                 // Load gamification data
@@ -76,7 +74,7 @@ export default function LearnPage({ params }: LearnPageProps) {
                     setAchievements(achievementsData);
                     setActivity(activityData);
                     setCompletedLessons(new Set(completedData));
-                } catch (e) {
+                } catch {
                     console.log('Gamification data not available yet');
                 }
             } catch (error) {
@@ -101,7 +99,7 @@ export default function LearnPage({ params }: LearnPageProps) {
             setAchievements(achievementsData);
             setActivity(activityData);
             setCompletedLessons(new Set(completedData));
-        } catch (e) {
+        } catch {
             console.log('Failed to refresh stats');
         }
     };

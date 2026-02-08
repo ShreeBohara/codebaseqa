@@ -13,6 +13,9 @@ def create_embedding_service() -> BaseEmbeddings:
             api_key=settings.openai_api_key,
             model=settings.openai_embedding_model,
             base_url=settings.openai_base_url,
+            max_tokens_per_request=settings.openai_embedding_max_tokens_per_request,
+            max_texts_per_request=settings.openai_embedding_max_texts_per_request,
+            request_concurrency=settings.openai_embedding_request_concurrency,
         )
     elif provider == "ollama":
         return OllamaEmbeddings(

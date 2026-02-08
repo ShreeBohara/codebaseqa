@@ -6,7 +6,7 @@ Designed for easy self-hosting with sensible defaults.
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     embedding_provider: str = "openai"  # "openai" or "ollama"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_base_url: Optional[str] = None  # Optional: OpenAI-compatible endpoint (e.g., LM Studio)
+    openai_embedding_max_tokens_per_request: int = 250000
+    openai_embedding_max_texts_per_request: int = 128
+    openai_embedding_request_concurrency: int = 1
     voyage_api_key: Optional[str] = None
     voyage_model: str = "voyage-code-3"
     local_embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
@@ -85,10 +88,11 @@ class Settings(BaseSettings):
     # OpenAI-compatible client defaults (LM Studio)
     openai_timeout_seconds: int = 120
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 @lru_cache()

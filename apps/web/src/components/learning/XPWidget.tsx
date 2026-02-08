@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Flame, Zap, ChevronUp, Star, Target } from 'lucide-react';
+import { Trophy, Flame, Zap, ChevronUp } from 'lucide-react';
 import { UserStats } from '@/lib/api-client';
 
 interface XPWidgetProps {

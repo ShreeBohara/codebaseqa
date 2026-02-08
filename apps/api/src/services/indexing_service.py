@@ -6,7 +6,7 @@ Handles cloning, parsing, and embedding of code repositories.
 import hashlib
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -113,7 +113,7 @@ class IndexingService:
 
             # Complete
             repo.status = IndexingStatus.COMPLETED
-            repo.last_indexed_at = datetime.utcnow()
+            repo.last_indexed_at = datetime.now(timezone.utc)
             self._db.commit()
             self._update_progress(repo_id, "completed", "Indexing complete!", 100)
 

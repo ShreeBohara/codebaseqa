@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Syllabus, Lesson } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    BookOpen, Clock, ChevronDown,
+    Clock, ChevronDown,
     Play, CheckCircle2, Circle
 } from 'lucide-react';
 

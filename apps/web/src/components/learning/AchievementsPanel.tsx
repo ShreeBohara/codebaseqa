@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Award, Lock, Check } from 'lucide-react';
 
 interface Achievement {
@@ -16,7 +16,6 @@ interface Achievement {
 
 interface AchievementsPanelProps {
     achievements: Achievement[];
-    onClose?: () => void;
 }
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
@@ -26,7 +25,7 @@ const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
     challenge: { label: 'Challenges', color: 'from-purple-500 to-pink-500' },
 };
 
-export function AchievementsPanel({ achievements, onClose }: AchievementsPanelProps) {
+export function AchievementsPanel({ achievements }: AchievementsPanelProps) {
     const grouped = achievements.reduce((acc, a) => {
         if (!acc[a.category]) acc[a.category] = [];
         acc[a.category].push(a);
@@ -35,6 +34,7 @@ export function AchievementsPanel({ achievements, onClose }: AchievementsPanelPr
 
     const unlocked = achievements.filter(a => a.unlocked).length;
     const total = achievements.length;
+    const completionRatio = total > 0 ? unlocked / total : 0;
 
     return (
         <div className="bg-zinc-900/95 border border-zinc-800 rounded-2xl overflow-hidden max-w-2xl w-full max-h-[80vh] flex flex-col">
@@ -74,7 +74,7 @@ export function AchievementsPanel({ achievements, onClose }: AchievementsPanelPr
                                 fill="none"
                                 strokeLinecap="round"
                                 initial={{ strokeDasharray: '0 176' }}
-                                animate={{ strokeDasharray: `${(unlocked / total) * 176} 176` }}
+                                animate={{ strokeDasharray: `${completionRatio * 176} 176` }}
                                 transition={{ duration: 1, ease: 'easeOut' }}
                             />
                             <defs>
@@ -86,7 +86,7 @@ export function AchievementsPanel({ achievements, onClose }: AchievementsPanelPr
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
                             <span className="text-lg font-bold text-white">
-                                {Math.round((unlocked / total) * 100)}%
+                                {Math.round(completionRatio * 100)}%
                             </span>
                         </div>
                     </div>

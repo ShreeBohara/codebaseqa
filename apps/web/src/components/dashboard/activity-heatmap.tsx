@@ -2,18 +2,18 @@
 
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
-import { format, subDays, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, subDays, eachDayOfInterval } from 'date-fns';
 
 interface ActivityHeatmapProps {
     data: Record<string, number>; // date "YYYY-MM-DD" -> count
 }
 
 export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
-    const today = new Date();
     const daysToShow = 365; // Show last year
 
     // Generate dates
     const dates = useMemo(() => {
+        const today = new Date();
         const start = subDays(today, daysToShow);
         return eachDayOfInterval({ start, end: today });
     }, []);

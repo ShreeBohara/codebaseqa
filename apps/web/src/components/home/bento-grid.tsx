@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Network, GraduationCap, Trophy, Search, ArrowUpRight, Lock, CheckCircle2 } from 'lucide-react';
+import { Network, GraduationCap, Trophy, CheckCircle2 } from 'lucide-react';
 import { ReactNode } from 'react';
 
 // Card Component

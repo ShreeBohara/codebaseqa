@@ -91,9 +91,25 @@ pip install -r requirements.txt
 uvicorn src.main:app --reload
 
 # Terminal 2: Web
-cd apps/web
-pnpm dev
+pnpm web:dev
+
+# Optional (direct package command)
+# cd apps/web
+# pnpm dev
 ```
+
+---
+
+### Frontend Troubleshooting
+
+If the UI looks unstyled (plain text/stacked layout), clear Next.js build artifacts and restart:
+
+```bash
+rm -rf apps/web/.next
+pnpm web:dev
+```
+
+Use `pnpm web:dev` as the canonical frontend start command.
 
 ---
 
@@ -123,6 +139,9 @@ CodebaseQA reads settings from environment variables (via `apps/api/src/config.p
 | `OPENAI_MODEL` | OpenAI chat model | `gpt-4o` |
 | `OPENAI_EMBEDDING_MODEL` | OpenAI embedding model | `text-embedding-3-small` |
 | `OPENAI_BASE_URL` | OpenAI-compatible endpoint override | unset |
+| `OPENAI_EMBEDDING_MAX_TOKENS_PER_REQUEST` | Max total tokens per embedding request batch | `250000` |
+| `OPENAI_EMBEDDING_MAX_TEXTS_PER_REQUEST` | Max chunk count per embedding request batch | `128` |
+| `OPENAI_EMBEDDING_REQUEST_CONCURRENCY` | Max concurrent embedding requests | `1` |
 | `ANTHROPIC_API_KEY` | Anthropic API key | unset |
 | `ANTHROPIC_MODEL` | Anthropic model | `claude-sonnet-4-20250514` |
 | `OLLAMA_BASE_URL` | Ollama host URL | `http://localhost:11434` |
@@ -133,6 +152,7 @@ Notes:
 
 - Docker compose currently passes `OPENAI_API_KEY` by default; if you want Anthropic/Ollama in Docker, add those env vars in `docker/docker-compose.yml`.
 - For local development, all variables above can be set directly in your shell or `.env`.
+- Large repositories can trigger temporary embedding rate limits (`HTTP 429`). Indexing retries automatically; tune the three `OPENAI_EMBEDDING_*` controls above if needed.
 
 ---
 
@@ -265,6 +285,7 @@ cd apps/web
 pnpm lint
 pnpm type-check
 pnpm test
+pnpm build
 ```
 
 Workspace shortcuts:
@@ -273,13 +294,15 @@ Workspace shortcuts:
 pnpm lint
 pnpm test
 pnpm type-check
+pnpm web:build
+pnpm web:verify-css
 ```
 
 ---
 
 ## Current Limitations
 
-- Very large repositories can still be slow/expensive to index depending on provider/model choice.
+- Very large repositories can still be slow/expensive to index depending on provider/model choice, and may hit temporary embedding rate limits before retries succeed.
 - Lesson/challenge/graph generation quality depends on model capability and retrieved context.
 - Docker setup is optimized for OpenAI defaults unless extra provider vars are explicitly wired.
 
