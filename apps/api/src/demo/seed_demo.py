@@ -24,6 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.config import settings
+from src.dependencies import get_vector_store
 from src.models.database import IndexingStatus, Repository, init_db
 from src.services.indexing_service import IndexingService
 
@@ -79,13 +80,20 @@ def create_demo_repo(db) -> Repository:
 
 async def index_demo_repo(db, repo_id: str) -> bool:
     """Run indexing for the demo repo."""
+    vector_store = get_vector_store()
     try:
+        # Seed script runs outside FastAPI lifespan, so initialize store explicitly.
+        await vector_store.initialize()
         service = IndexingService(db)
         await service.index_repository(repo_id)
-        return True
+        db.expire_all()
+        repo = db.query(Repository).filter(Repository.id == repo_id).first()
+        return bool(repo and repo.status == IndexingStatus.COMPLETED)
     except Exception as e:
         logger.error(f"Indexing failed: {e}", exc_info=True)
         return False
+    finally:
+        await vector_store.close()
 
 
 def wait_for_indexing(db, repo_id: str, timeout: int = 300) -> bool:

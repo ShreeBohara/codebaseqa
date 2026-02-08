@@ -39,12 +39,18 @@ class ChromaStore:
             is_persistent=True,
         ))
 
+    async def _ensure_initialized(self):
+        """Lazily initialize client for non-lifespan code paths (e.g. seed scripts)."""
+        if self._client is None:
+            await self.initialize()
+
     async def close(self):
         """Cleanup resources."""
         self._executor.shutdown(wait=True)
 
     async def create_collection(self, name: str, dimension: int = None):
         """Create or get a collection."""
+        await self._ensure_initialized()
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             self._executor,
@@ -53,6 +59,7 @@ class ChromaStore:
 
     async def delete_collection(self, name: str):
         """Delete a collection."""
+        await self._ensure_initialized()
         loop = asyncio.get_event_loop()
         try:
             await loop.run_in_executor(
@@ -71,6 +78,7 @@ class ChromaStore:
         metadatas: List[Dict],
     ):
         """Add documents to collection."""
+        await self._ensure_initialized()
         try:
             collection = self._client.get_collection(collection_name)
         except ValueError:
@@ -103,6 +111,7 @@ class ChromaStore:
         limit: int = 10,
     ) -> List[SearchResult]:
         """Search by vector similarity."""
+        await self._ensure_initialized()
         try:
             collection = self._client.get_collection(collection_name)
         except ValueError:
@@ -215,4 +224,3 @@ class ChromaStore:
 
         boosted.sort(key=lambda x: x.score, reverse=True)
         return boosted[:limit]
-
