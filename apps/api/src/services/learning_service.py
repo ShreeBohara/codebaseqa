@@ -1118,7 +1118,7 @@ Return strict JSON:
             f'  GOAL["Lesson Goal: {title_label}"]',
             f'  PERSONA["Persona Lens: {persona_label}"]',
             f'  MODULE["Module Focus: {module_label}"]',
-            f'  FILES["Referenced Files:<br/>{files_label}"]',
+            f'  FILES["Referenced Code Files:<br/>{files_label}"]',
             "  GOAL --> PERSONA",
             "  PERSONA --> MODULE",
             '  subgraph EXEC["Repository Execution Flow"]',

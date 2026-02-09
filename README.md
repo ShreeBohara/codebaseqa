@@ -118,7 +118,7 @@ Use `pnpm web:dev` as the canonical frontend start command.
 CodebaseQA supports a public-safe runtime mode for hosted demos.
 
 - Set `DEMO_MODE=true` to pin the deployment to one featured repository.
-- Default featured repository is `fastapi/fastapi` (configurable with `DEMO_REPO_*` env vars).
+- Default featured repository is `vercel/nextjs-subscription-payments` (configurable with `DEMO_REPO_*` env vars).
 - In demo mode, repo import/delete can be disabled, and chat/learning endpoints apply soft rate limits.
 - Frontend automatically shows a demo banner and hides destructive repo actions.
 

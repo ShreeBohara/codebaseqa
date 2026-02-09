@@ -6,7 +6,7 @@ Usage:
     python -m src.demo.seed_demo
 
 This script:
-1. Adds a configured demo repository (defaults to fastapi/fastapi)
+1. Adds a configured demo repository (defaults to vercel/nextjs-subscription-payments)
 2. Triggers indexing
 3. Waits for completion (optional)
 """

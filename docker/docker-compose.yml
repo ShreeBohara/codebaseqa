@@ -36,10 +36,10 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - DEMO_MODE=${DEMO_MODE:-false}
       - SEED_DEMO=${SEED_DEMO:-false}
-      - DEMO_REPO_URL=${DEMO_REPO_URL:-https://github.com/fastapi/fastapi}
-      - DEMO_REPO_OWNER=${DEMO_REPO_OWNER:-fastapi}
-      - DEMO_REPO_NAME=${DEMO_REPO_NAME:-fastapi}
-      - DEMO_REPO_BRANCH=${DEMO_REPO_BRANCH:-master}
+      - DEMO_REPO_URL=${DEMO_REPO_URL:-https://github.com/vercel/nextjs-subscription-payments}
+      - DEMO_REPO_OWNER=${DEMO_REPO_OWNER:-vercel}
+      - DEMO_REPO_NAME=${DEMO_REPO_NAME:-nextjs-subscription-payments}
+      - DEMO_REPO_BRANCH=${DEMO_REPO_BRANCH:-main}
       - DEMO_ALLOW_PUBLIC_IMPORTS=${DEMO_ALLOW_PUBLIC_IMPORTS:-false}
       - DEMO_BUSY_MODE=${DEMO_BUSY_MODE:-false}
       - DEMO_RATE_LIMIT_ENABLED=${DEMO_RATE_LIMIT_ENABLED:-true}

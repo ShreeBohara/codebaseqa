@@ -383,7 +383,7 @@ export function RepoList({ initialRepos, platformConfig }: RepoListProps) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     { name: 'expressjs/express', desc: 'Fast, minimal web framework' },
-                    { name: 'fastapi/fastapi', desc: 'Modern Python web framework' },
+                    { name: 'vercel/nextjs-subscription-payments', desc: 'SaaS starter with Next.js + Stripe' },
                     { name: 'vercel/next.js', desc: 'React framework for production' },
                     { name: 'django/django', desc: 'Batteries-included Python framework' },
                   ].map((example) => (

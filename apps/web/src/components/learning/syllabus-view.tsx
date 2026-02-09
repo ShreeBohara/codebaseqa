@@ -26,16 +26,6 @@ export function SyllabusView({
     const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set([0])); // First module expanded by default
     const [refreshing, setRefreshing] = useState(false);
 
-    // Calculate progress
-    const totalLessons = syllabus.modules.reduce((sum, m) => sum + m.lessons.length, 0);
-    const completedCount = completedLessons.size;
-    const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
-    const moduleCompletion = syllabus.modules.filter((module) => {
-        const done = module.lessons.filter((lesson) => completedLessons.has(lesson.id)).length;
-        return done > 0;
-    }).length;
-    const competencyPercent = syllabus.modules.length > 0 ? Math.round((moduleCompletion / syllabus.modules.length) * 100) : 0;
-
     const handleRefresh = async () => {
         if (!onRefreshTrack || refreshing) return;
         setRefreshing(true);
@@ -101,44 +91,6 @@ export function SyllabusView({
                         <RotateCw size={14} className={refreshing ? 'animate-spin' : ''} />
                         Regenerate Track
                     </button>
-                </div>
-
-                {/* Progress Bars */}
-                <div className="grid max-w-2xl mx-auto gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                        <div className="flex items-center justify-between text-sm mb-2">
-                            <span className="text-slate-500">Lesson Progress</span>
-                            <span className="text-white font-semibold">{progressPercent}%</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${progressPercent}%` }}
-                                transition={{ duration: 1, ease: "easeOut" }}
-                                className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
-                            />
-                        </div>
-                        <p className="text-xs text-slate-500 mt-2">
-                            {completedCount} of {totalLessons} lessons completed
-                        </p>
-                    </div>
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                        <div className="flex items-center justify-between text-sm mb-2">
-                            <span className="text-slate-500">Competency Coverage</span>
-                            <span className="text-white font-semibold">{competencyPercent}%</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${competencyPercent}%` }}
-                                transition={{ duration: 1, ease: "easeOut" }}
-                                className="h-full bg-gradient-to-r from-emerald-500 to-lime-400"
-                            />
-                        </div>
-                        <p className="text-xs text-slate-500 mt-2">
-                            {moduleCompletion} of {syllabus.modules.length} modules touched
-                        </p>
-                    </div>
                 </div>
             </motion.div>
 

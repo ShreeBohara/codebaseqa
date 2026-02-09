@@ -148,10 +148,10 @@ class Settings(BaseSettings):
 
     # Demo mode controls
     demo_mode: bool = False
-    demo_repo_url: str = "https://github.com/fastapi/fastapi"
-    demo_repo_owner: str = "fastapi"
-    demo_repo_name: str = "fastapi"
-    demo_repo_branch: str = "master"
+    demo_repo_url: str = "https://github.com/vercel/nextjs-subscription-payments"
+    demo_repo_owner: str = "vercel"
+    demo_repo_name: str = "nextjs-subscription-payments"
+    demo_repo_branch: str = "main"
     demo_allow_public_imports: bool = False
     demo_banner_text: str = (
         "Live demo mode: this deployment is pinned to one featured repository. "
