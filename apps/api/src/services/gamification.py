@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from src.models.database import Achievement, LessonProgress, UserXP
+from src.models.database import Achievement, GraphNodeInteraction, LessonProgress, UserXP
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ ACHIEVEMENTS: List[AchievementDef] = [
     # Explorer
     AchievementDef(key="graph_first_view", name="Cartographer", description="View the dependency graph", icon="🗺️", category="explorer", xp_reward=25),
     AchievementDef(key="graph_nodes_10", name="Deep Diver", description="Explore 10 graph nodes", icon="🔬", category="explorer", xp_reward=50, requirement=10),
-    AchievementDef(key="graph_all_layouts", name="Navigator", description="Try all graph layouts", icon="🌐", category="explorer", xp_reward=50),
+    AchievementDef(key="graph_focus_25", name="System Mapper", description="Explore 25 unique graph nodes", icon="🧭", category="explorer", xp_reward=75, requirement=25),
 
     # Challenges
     AchievementDef(key="challenge_first", name="Challenger", description="Complete your first challenge", icon="⚔️", category="challenge", xp_reward=25),
@@ -391,35 +391,92 @@ class GamificationService:
             if progress >= 5:
                 self.unlock_achievement(repo_id, "challenge_perfect_5")
 
+    def record_graph_node_view(self, repo_id: str, node_id: str) -> Dict:
+        """Track unique graph nodes viewed and unlock exploration achievements."""
+        node_id = (node_id or "").strip()
+        if not node_id:
+            return {"unique_nodes_viewed": 0, "new_view": False, "achievements_unlocked": []}
+
+        existing = self._db.query(GraphNodeInteraction).filter(
+            GraphNodeInteraction.repository_id == repo_id,
+            GraphNodeInteraction.node_id == node_id
+        ).first()
+
+        new_view = False
+        if not existing:
+            self._db.add(GraphNodeInteraction(repository_id=repo_id, node_id=node_id))
+            self._db.commit()
+            new_view = True
+
+        unique_nodes_viewed = self._db.query(GraphNodeInteraction).filter(
+            GraphNodeInteraction.repository_id == repo_id
+        ).count()
+
+        unlocked: List[Dict] = []
+        if unique_nodes_viewed >= 10:
+            achievement = self.unlock_achievement(repo_id, "graph_nodes_10")
+            if achievement:
+                unlocked.append(achievement.model_dump())
+
+        if unique_nodes_viewed >= 25:
+            achievement = self.unlock_achievement(repo_id, "graph_focus_25")
+            if achievement:
+                unlocked.append(achievement.model_dump())
+
+        return {
+            "unique_nodes_viewed": unique_nodes_viewed,
+            "new_view": new_view,
+            "achievements_unlocked": unlocked,
+        }
+
     # -------------------------------------------------------------------------
     # Progress Recording
     # -------------------------------------------------------------------------
 
-    def record_lesson_complete(self, repo_id: str, lesson_id: str, time_seconds: int) -> XPGain:
+    def record_lesson_complete(
+        self,
+        repo_id: str,
+        lesson_id: str,
+        time_seconds: int,
+        persona: Optional[str] = None,
+        module_id: Optional[str] = None,
+    ) -> XPGain:
         """Record lesson completion and award XP."""
         from datetime import datetime
 
         # Check if already completed (prevent double XP)
-        existing = self._db.query(LessonProgress).filter(
+        existing_query = self._db.query(LessonProgress).filter(
             LessonProgress.repository_id == repo_id,
             LessonProgress.lesson_id == lesson_id,
-            LessonProgress.status == "completed"
-        ).first()
+            LessonProgress.status == "completed",
+        )
+        if persona is None:
+            existing_query = existing_query.filter(LessonProgress.persona.is_(None))
+        else:
+            existing_query = existing_query.filter(LessonProgress.persona == persona)
+        existing = existing_query.first()
 
         if existing:
             # Already completed, return 0 XP
             return XPGain(amount=0, reason="already_completed")
 
         # Create or update lesson progress
-        progress = self._db.query(LessonProgress).filter(
+        progress_query = self._db.query(LessonProgress).filter(
             LessonProgress.repository_id == repo_id,
-            LessonProgress.lesson_id == lesson_id
-        ).first()
+            LessonProgress.lesson_id == lesson_id,
+        )
+        if persona is None:
+            progress_query = progress_query.filter(LessonProgress.persona.is_(None))
+        else:
+            progress_query = progress_query.filter(LessonProgress.persona == persona)
+        progress = progress_query.first()
 
         if not progress:
             progress = LessonProgress(
                 repository_id=repo_id,
                 lesson_id=lesson_id,
+                persona=persona,
+                module_id=module_id,
                 status="completed",
                 completed_at=datetime.utcnow(),
                 time_spent_seconds=time_seconds
@@ -429,6 +486,8 @@ class GamificationService:
             progress.status = "completed"
             progress.completed_at = datetime.utcnow()
             progress.time_spent_seconds += time_seconds
+            if module_id:
+                progress.module_id = module_id
 
         # Update user XP stats
         user_xp = self.get_or_create_user_xp(repo_id)
@@ -444,12 +503,15 @@ class GamificationService:
         # Award XP
         return self.award_xp(repo_id, "lesson_complete")
 
-    def get_completed_lessons(self, repo_id: str) -> list[str]:
+    def get_completed_lessons(self, repo_id: str, persona: Optional[str] = None) -> list[str]:
         """Get list of completed lesson IDs for a repository."""
-        results = self._db.query(LessonProgress.lesson_id).filter(
+        query = self._db.query(LessonProgress.lesson_id).filter(
             LessonProgress.repository_id == repo_id,
             LessonProgress.status == "completed"
-        ).all()
+        )
+        if persona is not None:
+            query = query.filter(LessonProgress.persona == persona)
+        results = query.all()
         return [r[0] for r in results]
 
     def record_quiz_complete(self, repo_id: str, lesson_id: str, score: float) -> XPGain:

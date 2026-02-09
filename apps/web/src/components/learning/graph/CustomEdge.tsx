@@ -2,46 +2,13 @@
 
 import { memo } from 'react';
 import { BaseEdge, Edge, EdgeLabelRenderer, EdgeProps, getBezierPath } from '@xyflow/react';
-import { motion } from 'framer-motion';
 
-// Edge type configuration
 export const EDGE_TYPES = {
-    imports: {
-        color: '#6366f1',
-        style: 'solid',
-        animated: true,
-        label: 'imports'
-    },
-    uses: {
-        color: '#06b6d4',
-        style: 'dashed',
-        animated: false,
-        label: 'uses'
-    },
-    extends: {
-        color: '#8b5cf6',
-        style: 'solid',
-        animated: true,
-        label: 'extends'
-    },
-    implements: {
-        color: '#10b981',
-        style: 'dotted',
-        animated: false,
-        label: 'implements'
-    },
-    calls: {
-        color: '#f59e0b',
-        style: 'solid',
-        animated: true,
-        label: 'calls'
-    },
-    configures: {
-        color: '#ec4899',
-        style: 'dashed',
-        animated: false,
-        label: 'configures'
-    }
+    imports: { color: '#818cf8', style: 'solid', label: 'imports' },
+    uses: { color: '#22d3ee', style: 'dashed', label: 'uses' },
+    extends: { color: '#c084fc', style: 'solid', label: 'extends' },
+    calls: { color: '#f59e0b', style: 'solid', label: 'calls' },
+    configures: { color: '#f472b6', style: 'dashed', label: 'configures' },
 } as const;
 
 export type EdgeType = keyof typeof EDGE_TYPES;
@@ -49,19 +16,22 @@ export type EdgeType = keyof typeof EDGE_TYPES;
 export interface CustomEdgeData {
     label?: string;
     type?: EdgeType;
-    weight?: number;  // 1-5 for edge thickness
+    relation?: string;
+    weight?: number;
+    confidence?: number;
+    rank?: number;
+    zoomLevel?: number;
+    isDimmed?: boolean;
     isHighlighted?: boolean;
     [key: string]: unknown;
 }
 
 export type CustomFlowEdge = Edge<CustomEdgeData, 'custom'>;
 
-// Get stroke width based on weight (1-5)
-function getWeightedStrokeWidth(weight?: number, isHighlighted?: boolean): number {
-    const baseWidth = isHighlighted ? 3 : 2;
-    if (!weight) return baseWidth;
-    // Scale from 1.5 (weight=1) to 4 (weight=5)
-    return 1.5 + (weight - 1) * 0.625 + (isHighlighted ? 1 : 0);
+function getStrokeWidth(weight?: number, highlighted?: boolean): number {
+    const base = highlighted ? 2.2 : 1.3;
+    if (!weight) return base;
+    return base + Math.min(2, weight * 0.35);
 }
 
 function CustomEdgeComponent({
@@ -86,83 +56,60 @@ function CustomEdgeComponent({
         targetX,
         targetY,
         targetPosition,
-        curvature: 0.25,
+        curvature: 0.23,
     });
 
-    const isHighlighted = data?.isHighlighted || selected;
+    const highlighted = Boolean(selected || data?.isHighlighted);
+    const zoomLevel = data?.zoomLevel ?? 1;
+    const isDimmed = Boolean(data?.isDimmed && !highlighted);
+    const showLabel = highlighted || (((data?.weight ?? 0) >= 4 || (data?.rank ?? 0) >= 0.82) && zoomLevel >= 0.9);
 
     return (
         <>
-            {/* Glow effect for highlighted edges */}
-            {isHighlighted && (
+            {highlighted && (
                 <path
                     d={edgePath}
                     fill="none"
                     stroke={config.color}
-                    strokeWidth={8}
-                    strokeOpacity={0.3}
-                    filter="blur(4px)"
+                    strokeWidth={6.5}
+                    strokeOpacity={0.16}
+                    filter="blur(3px)"
                 />
             )}
 
-            {/* Main edge path */}
             <BaseEdge
                 id={id}
                 path={edgePath}
                 markerEnd={markerEnd}
                 style={{
                     stroke: config.color,
-                    strokeWidth: getWeightedStrokeWidth(data?.weight, isHighlighted),
-                    strokeDasharray: config.style === 'dashed' ? '8,4' : config.style === 'dotted' ? '2,4' : 'none',
-                    transition: 'stroke-width 0.2s ease',
+                    strokeOpacity: highlighted ? 0.95 : isDimmed ? 0.1 : 0.24,
+                    strokeWidth: getStrokeWidth(data?.weight, highlighted),
+                    strokeDasharray: config.style === 'dashed' ? '6,5' : 'none',
+                    transition: 'stroke-opacity 120ms ease, stroke-width 120ms ease',
                 }}
             />
 
-            {/* Animated dot flowing along the edge */}
-            {config.animated && (
-                <motion.circle
-                    r={4}
-                    fill={config.color}
-                    filter={`drop-shadow(0 0 4px ${config.color})`}
-                    initial={{ offsetDistance: '0%' }}
-                    animate={{ offsetDistance: '100%' }}
-                    transition={{
-                        duration: 2,
-                        repeat: Infinity,
-                        ease: 'linear',
-                    }}
-                    style={{
-                        offsetPath: `path('${edgePath}')`,
-                    }}
-                />
-            )}
-
-            {/* Edge label */}
-            {data?.label && (
+            {showLabel && (
                 <EdgeLabelRenderer>
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="nodrag nopan pointer-events-auto"
+                    <div
+                        className="nodrag nopan"
                         style={{
                             position: 'absolute',
                             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
                         }}
                     >
                         <div
-                            className={`
-                                px-2 py-0.5 rounded-full text-[10px] font-medium
-                                border backdrop-blur-sm
-                                ${isHighlighted ? 'bg-zinc-800/90' : 'bg-zinc-900/80'}
-                            `}
+                            className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm"
                             style={{
                                 color: config.color,
-                                borderColor: `${config.color}40`,
+                                borderColor: `${config.color}55`,
+                                background: 'rgba(9, 9, 11, 0.86)',
                             }}
                         >
-                            {data.label}
+                            {data?.relation || data?.label || config.label}
                         </div>
-                    </motion.div>
+                    </div>
                 </EdgeLabelRenderer>
             )}
         </>

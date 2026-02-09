@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import AsyncGenerator, Dict, List
 
@@ -13,6 +14,7 @@ class AnthropicLLM(BaseLLM):
     def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514"):
         self._client = AsyncAnthropic(api_key=api_key)
         self._model = model
+        self._max_retries = 3
 
     async def generate(self, messages: List[Dict[str, str]], use_cache: bool = True) -> str:
         """Generate response using Anthropic API."""
@@ -49,22 +51,39 @@ class AnthropicLLM(BaseLLM):
             raise
 
     async def generate_stream(self, messages: List[Dict[str, str]]) -> AsyncGenerator[str, None]:
-        """Generate streaming response."""
-        try:
-            system = next((m["content"] for m in messages if m["role"] == "system"), "")
-            chat_messages = [m for m in messages if m["role"] != "system"]
+        """Generate streaming response with retry-before-first-token behavior."""
+        system = next((m["content"] for m in messages if m["role"] == "system"), "")
+        chat_messages = [m for m in messages if m["role"] != "system"]
 
-            async with self._client.messages.stream(
-                model=self._model,
-                max_tokens=4096,
-                system=system,
-                messages=chat_messages
-            ) as stream:
-                async for text in stream.text_stream:
-                    yield text
-        except Exception as e:
-            logger.error(f"Anthropic streaming failed: {e}")
-            yield f"\n\n[Error: {str(e)[:100]}]"
+        for attempt in range(self._max_retries):
+            yielded = False
+            try:
+                async with self._client.messages.stream(
+                    model=self._model,
+                    max_tokens=4096,
+                    system=system,
+                    messages=chat_messages
+                ) as stream:
+                    async for text in stream.text_stream:
+                        yielded = True
+                        yield text
+                return
+            except Exception as e:
+                should_retry = attempt < self._max_retries - 1 and not yielded
+                if should_retry:
+                    wait_time = (2 ** attempt) + 0.5
+                    logger.warning(
+                        "Anthropic stream failed before first token (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1,
+                        self._max_retries,
+                        wait_time,
+                        e,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                logger.error(f"Anthropic streaming failed: {e}")
+                yield f"\n\n[Error: {str(e)[:100]}]"
+                return
 
     async def health_check(self) -> bool:
         """Check Anthropic API availability."""

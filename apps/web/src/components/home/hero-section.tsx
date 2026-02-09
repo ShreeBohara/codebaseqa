@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Github, Sparkles, Network } from 'lucide-react';
+import { ArrowRight, Github, Globe, Sparkles, Network } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 const ROLES = [
@@ -11,19 +11,52 @@ const ROLES = [
     { text: "Auditors", color: "text-rose-400" },
     { text: "Developers", color: "text-indigo-400" },
 ];
+const LONGEST_ROLE_LENGTH = Math.max(...ROLES.map((role) => role.text.length));
+
+const TYPE_SPEED_MS = 85;
+const DELETE_SPEED_MS = 55;
+const HOLD_TYPED_MS = 1200;
+const HOLD_EMPTY_MS = 200;
+const PORTFOLIO_URL = 'https://shreebohara.com/';
 
 export function HeroSection() {
     const [roleIndex, setRoleIndex] = useState(0);
+    const [typedText, setTypedText] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const currentRole = ROLES[roleIndex].text;
+
+        if (!isDeleting && typedText.length < currentRole.length) {
+            const timeout = setTimeout(() => {
+                setTypedText(currentRole.slice(0, typedText.length + 1));
+            }, TYPE_SPEED_MS);
+            return () => clearTimeout(timeout);
+        }
+
+        if (!isDeleting && typedText.length === currentRole.length) {
+            const timeout = setTimeout(() => {
+                setIsDeleting(true);
+            }, HOLD_TYPED_MS);
+            return () => clearTimeout(timeout);
+        }
+
+        if (isDeleting && typedText.length > 0) {
+            const timeout = setTimeout(() => {
+                setTypedText(currentRole.slice(0, typedText.length - 1));
+            }, DELETE_SPEED_MS);
+            return () => clearTimeout(timeout);
+        }
+
+        const timeout = setTimeout(() => {
+            setIsDeleting(false);
             setRoleIndex((prev) => (prev + 1) % ROLES.length);
-        }, 3000);
-        return () => clearInterval(interval);
-    }, []);
+        }, HOLD_EMPTY_MS);
+        return () => clearTimeout(timeout);
+    }, [isDeleting, roleIndex, typedText]);
 
     return (
-        <section className="relative px-6 pt-32 pb-24 md:pt-48 md:pb-32 overflow-hidden">
+        <section className="relative min-h-[100svh] px-6 pt-36 pb-20 md:pt-56 md:pb-24 overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl -z-10 pointer-events-none">
                 <div className="absolute top-[20%] left-[10%] w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[120px] mix-blend-screen animate-pulse" />
@@ -36,25 +69,22 @@ export function HeroSection() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
                 >
-                    {/* Badge */}
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-zinc-300 mb-8 backdrop-blur-md shadow-lg shadow-black/20">
-                        <Sparkles size={14} className="text-amber-400" />
-                        <span className="font-medium bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">
-                            V2.0: Now with Autopilot
-                        </span>
-                    </div>
-
                     <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight mb-8 leading-tight">
                         Master any codebase <br className="hidden md:block" />
-                        for <span className={`transition-colors duration-500 ${ROLES[roleIndex].color}`}>
-                            {ROLES[roleIndex].text}
+                        for <span
+                            className={`inline-block whitespace-nowrap text-left transition-colors duration-300 ${ROLES[roleIndex].color}`}
+                            style={{ minWidth: `${LONGEST_ROLE_LENGTH + 1}ch` }}
+                        >
+                            {typedText}
+                            <span className="animate-pulse">|</span>
                         </span>
                     </h1>
 
                     <p className="text-zinc-400 text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
-                        Stop searching blindly. Generate <span className="text-white font-medium">dependency graphs</span>,
+                        Stop searching blindly. <span className="text-white font-medium">Chat with your codebase</span> to get
+                        instant answers, then generate <span className="text-white font-medium">dependency graphs</span>,
                         personalized <span className="text-white font-medium">learning paths</span>, and
-                        interactive <span className="text-white font-medium">challenges</span> instantly.
+                        interactive <span className="text-white font-medium">challenges</span>.
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -73,6 +103,15 @@ export function HeroSection() {
                         >
                             <Github size={20} />
                             View on GitHub
+                        </a>
+                        <a
+                            href={PORTFOLIO_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white px-8 py-4 rounded-2xl font-medium transition-all md:text-lg"
+                        >
+                            <Globe size={20} />
+                            Portfolio
                         </a>
                     </div>
 

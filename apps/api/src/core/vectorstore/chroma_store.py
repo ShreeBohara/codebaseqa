@@ -4,9 +4,10 @@ Supports semantic and hybrid search.
 """
 
 import asyncio
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import chromadb
 import chromadb.errors
@@ -149,13 +150,80 @@ class ChromaStore:
         query_text: str,
         limit: int = 10,
         alpha: float = 0.5,
+        profile: str = "balanced",
+        path_allowlist: Optional[List[str]] = None,
     ) -> List[SearchResult]:
-        """Enhanced hybrid search with smart boosting."""
+        """Enhanced hybrid search with intent-aware boosting."""
         # Get more results for reranking
-        results = await self.search(collection_name, query_embedding, limit * 3)
+        results = await self.search(collection_name, query_embedding, limit * 4)
 
-        query_lower = query_text.lower()
-        query_terms = set(query_lower.split())
+        query_lower = query_text.lower().strip()
+        query_terms = self._normalize_query_terms(query_text)
+        allowlist = [p.lower().strip() for p in (path_allowlist or []) if p.strip()]
+
+        weight_profiles = {
+            "docs_first": {
+                "vector_alpha": 0.45,
+                "keyword_weight": 0.18,
+                "file_weight": 0.22,
+                "docs_boost": 0.45,
+                "manifest_boost": 0.12,
+                "trivial_penalty": 0.55,
+                "module_weight": 0.05,
+                "symbol_weight": 0.08,
+            },
+            "code_first": {
+                "vector_alpha": 0.65,
+                "keyword_weight": 0.15,
+                "file_weight": 0.18,
+                "docs_boost": 0.08,
+                "manifest_boost": 0.08,
+                "trivial_penalty": 0.30,
+                "module_weight": 0.18,
+                "symbol_weight": 0.14,
+            },
+            "stack": {
+                "vector_alpha": 0.50,
+                "keyword_weight": 0.16,
+                "file_weight": 0.20,
+                "docs_boost": 0.22,
+                "manifest_boost": 0.40,
+                "trivial_penalty": 0.35,
+                "module_weight": 0.08,
+                "symbol_weight": 0.10,
+            },
+            "location": {
+                "vector_alpha": 0.55,
+                "keyword_weight": 0.12,
+                "file_weight": 0.34,
+                "docs_boost": 0.10,
+                "manifest_boost": 0.12,
+                "trivial_penalty": 0.25,
+                "module_weight": 0.16,
+                "symbol_weight": 0.08,
+            },
+            "error_focus": {
+                "vector_alpha": 0.58,
+                "keyword_weight": 0.20,
+                "file_weight": 0.18,
+                "docs_boost": 0.08,
+                "manifest_boost": 0.10,
+                "trivial_penalty": 0.25,
+                "module_weight": 0.16,
+                "symbol_weight": 0.14,
+            },
+            "balanced": {
+                "vector_alpha": alpha,
+                "keyword_weight": 0.15,
+                "file_weight": 0.20,
+                "docs_boost": 0.18,
+                "manifest_boost": 0.15,
+                "trivial_penalty": 0.25,
+                "module_weight": 0.15,
+                "symbol_weight": 0.10,
+            },
+        }
+        weights = weight_profiles.get(profile, weight_profiles["balanced"])
 
         # Important file patterns for different question types
         important_patterns = {
@@ -172,15 +240,18 @@ class ChromaStore:
             file_path = r.metadata.get("file_path", "").lower()
             chunk_type = r.metadata.get("chunk_type", "")
 
+            if allowlist and not any(allowed in file_path for allowed in allowlist):
+                continue
+
             # Base keyword match boost
             keyword_matches = sum(1 for t in query_terms if t in content_lower)
-            keyword_boost = keyword_matches * 0.15
+            keyword_boost = keyword_matches * weights["keyword_weight"]
 
             # File path match boost
             file_boost = 0.0
             for term in query_terms:
                 if term in file_path:
-                    file_boost += 0.25
+                    file_boost += weights["file_weight"]
 
             # Important file pattern boost
             pattern_boost = 0.0
@@ -194,26 +265,38 @@ class ChromaStore:
             # Chunk type relevance boost
             type_boost = 0.0
             if chunk_type == "file_summary":
-                type_boost = 0.2  # File summaries are often most relevant
+                type_boost = 0.2
             elif chunk_type == "raw_file":
-                type_boost = 0.2  # Raw files (configs, readme) are important
+                type_boost = 0.2
             elif chunk_type == "module":
-                type_boost = 0.15  # Module-level code is often entry points
-            elif chunk_type in ["function", "class"]:
-                type_boost = 0.1
+                type_boost = weights["module_weight"]
+            elif chunk_type in ["function", "class", "method"]:
+                type_boost = weights["symbol_weight"]
 
-            # Important file boost (e.g., index, main, app files)
-            important_boost = 0.0
-            important_files = ["index.ts", "index.js", "main.py", "app.tsx",
-                             "layout.tsx", "server.ts", "package.json", "readme.md"]
-            for imp in important_files:
-                if imp in file_path:
-                    important_boost = 0.2
-                    break
+            docs_boost = weights["docs_boost"] if self._is_docs_path(file_path) else 0.0
+            manifest_boost = weights["manifest_boost"] if self._is_manifest_path(file_path) else 0.0
+
+            location_boost = 0.0
+            if profile == "location":
+                compact_query = "".join(query_terms)
+                compact_path = file_path.replace("/", "")
+                if compact_query and compact_query in compact_path:
+                    location_boost += 0.45
+
+            error_boost = 0.0
+            if profile == "error_focus":
+                if any(term in content_lower for term in ["error", "exception", "raise", "throw", "retry", "fallback"]):
+                    error_boost += 0.25
+
+            trivial_penalty = 0.0
+            if self._is_trivial_chunk(content=r.content, chunk_type=chunk_type):
+                trivial_penalty = weights["trivial_penalty"]
 
             # Calculate final score
-            total_boost = keyword_boost + file_boost + pattern_boost + type_boost + important_boost
-            final_score = (alpha * r.score) + ((1 - alpha) * min(total_boost, 1.0))
+            total_boost = keyword_boost + file_boost + pattern_boost + type_boost + docs_boost + manifest_boost + location_boost + error_boost
+            vector_alpha = float(weights["vector_alpha"])
+            heuristic_score = min(total_boost, 1.5)
+            final_score = (vector_alpha * r.score) + ((1 - vector_alpha) * heuristic_score) - trivial_penalty
 
             boosted.append(SearchResult(
                 id=r.id,
@@ -224,3 +307,62 @@ class ChromaStore:
 
         boosted.sort(key=lambda x: x.score, reverse=True)
         return boosted[:limit]
+
+    def _normalize_query_terms(self, query_text: str) -> List[str]:
+        stopwords = {
+            "a",
+            "an",
+            "and",
+            "are",
+            "as",
+            "at",
+            "be",
+            "by",
+            "for",
+            "from",
+            "how",
+            "in",
+            "is",
+            "it",
+            "of",
+            "on",
+            "or",
+            "that",
+            "the",
+            "this",
+            "to",
+            "what",
+            "where",
+            "which",
+            "with",
+        }
+        terms = re.findall(r"[a-zA-Z0-9_.-]+", query_text.lower())
+        return [term for term in terms if len(term) > 1 and term not in stopwords]
+
+    def _is_docs_path(self, file_path: str) -> bool:
+        return (
+            file_path.endswith("readme.md")
+            or file_path.endswith("readme")
+            or file_path.endswith(".md")
+            or file_path.endswith(".mdx")
+            or file_path.startswith("docs/")
+            or "/docs/" in file_path
+        )
+
+    def _is_manifest_path(self, file_path: str) -> bool:
+        return (
+            file_path.endswith("package.json")
+            or file_path.endswith("requirements.txt")
+            or file_path.endswith("pyproject.toml")
+            or file_path.endswith("go.mod")
+            or file_path.endswith("cargo.toml")
+            or file_path.endswith("pom.xml")
+        )
+
+    def _is_trivial_chunk(self, content: str, chunk_type: str) -> bool:
+        compact = re.sub(r"\s+", " ", content.strip().lower())
+        if len(compact) <= 32 and compact in {"export {};", "export {}"}:
+            return True
+        if chunk_type == "file_summary" and len(compact) <= 80 and compact.startswith("export"):
+            return True
+        return False

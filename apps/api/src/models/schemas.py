@@ -91,6 +91,11 @@ class ChatMessageCreate(BaseModel):
     """User message input."""
     content: str = Field(..., min_length=1, max_length=10000)
     context_files: Optional[List[str]] = Field(None, description="Specific files to focus on")
+    mode: Optional[str] = Field(
+        "auto",
+        description='Optional retrieval mode: "auto", "overview", "implementation", or "tech_stack".',
+    )
+    debug: Optional[bool] = Field(False, description="Enable extra diagnostics in streaming metadata.")
 
 
 class ChatMessageResponse(BaseModel):
@@ -99,6 +104,7 @@ class ChatMessageResponse(BaseModel):
     role: MessageRole
     content: str
     retrieved_chunks: Optional[List[Dict[str, Any]]] = None
+    retrieval_meta: Optional[Dict[str, Any]] = None
     created_at: datetime
 
 
@@ -119,9 +125,10 @@ class ChatSessionResponse(BaseModel):
 
 class StreamingChunk(BaseModel):
     """Server-sent event chunk for streaming responses."""
-    type: str  # "content", "sources", "done", "error"
+    type: str  # "content", "sources", "meta", "done", "error"
     content: Optional[str] = None
     sources: Optional[List[Dict[str, Any]]] = None
+    meta: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 

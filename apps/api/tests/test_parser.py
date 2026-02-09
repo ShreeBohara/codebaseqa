@@ -8,12 +8,16 @@ import pytest
 class TestTreeSitterParser:
     """Test suite for Tree-sitter parser."""
 
-    def test_python_parser_init(self):
-        """Test Python parser initialization."""
+    @pytest.mark.parametrize(
+        "language",
+        ["python", "javascript", "typescript", "java", "go", "rust", "csharp", "cpp", "ruby"],
+    )
+    def test_parser_init_for_supported_languages(self, language):
+        """Test parser initialization for all supported languages."""
         from src.core.parser.tree_sitter_parser import TreeSitterParser
 
-        parser = TreeSitterParser("python")
-        assert parser._language == "python"
+        parser = TreeSitterParser(language)
+        assert parser._language == language
 
     def test_python_parse_functions(self, sample_python_code):
         """Test parsing Python functions."""
@@ -66,21 +70,61 @@ class TestTreeSitterParser:
         func_names = [c.name for c in result.chunks if c.name]
         assert "formatName" in func_names
 
+    @pytest.mark.parametrize(
+        "language,fixture_name,file_name,expected_markers",
+        [
+            ("go", "sample_go_code", "main.go", ["add", "Greeter"]),
+            ("rust", "sample_rust_code", "main.rs", ["sum", "Counter"]),
+            ("csharp", "sample_csharp_code", "main.cs", ["Calculator", "Add"]),
+            ("cpp", "sample_cpp_code", "main.cpp", ["Greeter", "add"]),
+            ("ruby", "sample_ruby_code", "main.rb", ["Billing", "helper"]),
+        ],
+    )
+    def test_new_language_parsers_extract_symbols(
+        self,
+        request: pytest.FixtureRequest,
+        language: str,
+        fixture_name: str,
+        file_name: str,
+        expected_markers: list[str],
+    ):
+        """Test semantic parsing for newly added languages."""
+        from src.core.parser.tree_sitter_parser import TreeSitterParser
+
+        parser = TreeSitterParser(language)
+        sample = request.getfixturevalue(fixture_name)
+        result = parser.parse(sample, file_name)
+
+        assert result.language == language
+        assert len(result.chunks) > 0
+        extracted = " ".join(name for name in (c.name for c in result.chunks) if name)
+        for marker in expected_markers:
+            assert marker in extracted
+
     def test_get_parser_for_file(self):
         """Test automatic parser selection by file extension."""
         from src.core.parser.tree_sitter_parser import get_parser_for_file
 
-        py_parser = get_parser_for_file("app.py")
-        assert py_parser is not None
-        assert py_parser._language == "python"
-
-        js_parser = get_parser_for_file("app.js")
-        assert js_parser is not None
-        assert js_parser._language == "javascript"
-
-        ts_parser = get_parser_for_file("app.ts")
-        assert ts_parser is not None
-        assert ts_parser._language == "typescript"
+        cases = {
+            "app.py": "python",
+            "app.js": "javascript",
+            "app.ts": "typescript",
+            "app.java": "java",
+            "app.go": "go",
+            "app.rs": "rust",
+            "app.cs": "csharp",
+            "script.csx": "csharp",
+            "main.cpp": "cpp",
+            "main.cc": "cpp",
+            "header.hpp": "cpp",
+            "app.rb": "ruby",
+            "tasks.rake": "ruby",
+            "mygem.gemspec": "ruby",
+        }
+        for file_path, expected_language in cases.items():
+            parser = get_parser_for_file(file_path)
+            assert parser is not None
+            assert parser._language == expected_language
 
         # Unknown extension should return None
         unknown = get_parser_for_file("file.xyz")
@@ -91,4 +135,4 @@ class TestTreeSitterParser:
         from src.core.parser.tree_sitter_parser import TreeSitterParser
 
         with pytest.raises(ValueError):
-            TreeSitterParser("ruby")
+            TreeSitterParser("haskell")

@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "description": "Golden chat quality evaluation cases for grounding and retrieval.",
+  "cases": [
+    {
+      "id": "documenso-overview-main-features",
+      "repo": "documenso/documenso",
+      "question": "What are the main features of this application?",
+      "intent": "overview",
+      "expected_files": [
+        "README.md"
+      ],
+      "must_not_only_use": [
+        "package.json"
+      ],
+      "checks": [
+        "top_sources_include_expected_files",
+        "answer_mentions_docs_grounding",
+        "no_dependency_only_inference"
+      ]
+    }
+  ]
+}

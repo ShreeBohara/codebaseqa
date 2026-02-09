@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Challenge, ChallengeResult, CodeReference, LessonContent, Quiz, QuizResultResponse, UserStats, api } from '@/lib/api-client';
-import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, Check, Bug, Eye, Edit3, Download } from 'lucide-react';
+import { FileCode, Layers, X, Maximize2, Minimize2, Loader2, Award, Check, Bug, Eye, Edit3, Download, RotateCw, BookOpen, ChevronDown } from 'lucide-react';
+import { RepoContextBadge } from '@/components/common/repo-context-badge';
 import { QuizView } from './quiz-view';
 import { MermaidDiagram } from './MermaidDiagram';
 import { ChallengeView } from './ChallengeView';
@@ -16,17 +17,39 @@ interface XPGainResult {
 
 interface LessonViewProps {
     repoId: string;
+    repoName?: string;
     content: LessonContent;
+    persona?: string;
+    moduleId?: string;
+    onRegenerate?: () => Promise<void> | void;
     onClose: () => void;
     onComplete?: (xpGain: XPGainResult) => void;
     onGamificationUpdate?: (xpGain: XPGainResult, stats?: UserStats) => void;
 }
 
-export function LessonView({ repoId, content, onClose, onComplete, onGamificationUpdate }: LessonViewProps) {
+const PERSONA_MISSIONS: Record<string, string> = {
+    new_hire: 'Focus on fast onboarding and first safe delivery.',
+    auditor: 'Focus on trust boundaries, validation paths, and security risk.',
+    fullstack: 'Focus on end-to-end flow from UI through backend and storage.',
+    archaeologist: 'Focus on legacy decisions, evolution, and debt hotspots.',
+};
+
+export function LessonView({
+    repoId,
+    repoName,
+    content,
+    persona,
+    moduleId,
+    onRegenerate,
+    onClose,
+    onComplete,
+    onGamificationUpdate,
+}: LessonViewProps) {
     const [activeRef, setActiveRef] = useState<CodeReference | null>(
         content.code_references.length > 0 ? content.code_references[0] : null
     );
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [mobilePanel, setMobilePanel] = useState<'content' | 'code'>('content');
     const [fileContent, setFileContent] = useState<string | null>(null);
     const [loadingFile, setLoadingFile] = useState(false);
 
@@ -40,6 +63,11 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
     const [challenge, setChallenge] = useState<Challenge | null>(null);
     const [generatingChallenge, setGeneratingChallenge] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [regenerating, setRegenerating] = useState(false);
+
+    useEffect(() => {
+        setActiveRef(content.code_references.length > 0 ? content.code_references[0] : null);
+    }, [content]);
 
     useEffect(() => {
         async function loadContent() {
@@ -111,7 +139,7 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
     const handleExportCodeTour = async () => {
         setDownloading(true);
         try {
-            const tour = await api.exportCodeTour(repoId, content.id);
+            const tour = await api.exportCodeTour(repoId, content.id, { persona });
             // Create blob and download
             const blob = new Blob([JSON.stringify(tour, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -132,7 +160,10 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
 
     const handleFinishLesson = async () => {
         try {
-            const result = await api.completeLesson(repoId, content.id, 300); // Mock time spent
+            const result = await api.completeLesson(repoId, content.id, 300, {
+                persona,
+                moduleId,
+            }); // Mock time spent
 
             // Trigger Confetti
             confetti({
@@ -147,6 +178,27 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
         } catch (error) {
             console.error("Failed to complete lesson:", error);
         }
+    };
+
+    const handleRegenerate = async () => {
+        if (!onRegenerate || regenerating) return;
+        setRegenerating(true);
+        try {
+            await onRegenerate();
+        } finally {
+            setRegenerating(false);
+        }
+    };
+
+    const qualityMeta = (content.quality_meta ?? {}) as Record<string, unknown>;
+    const hasQualityMeta = Object.keys(qualityMeta).length > 0;
+    const quizLabel = generatingQuiz ? 'Generating Quiz...' : quiz ? 'Retake Quiz' : 'Take Quiz';
+
+    const closeActionMenus = () => {
+        if (typeof document === 'undefined') return;
+        document.querySelectorAll('details[data-action-menu]').forEach((node) => {
+            (node as HTMLDetailsElement).open = false;
+        });
     };
 
     return (
@@ -189,83 +241,177 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
             </AnimatePresence>
 
             {/* Toolbar */}
-            <div className="h-14 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-900/50 backdrop-blur relative z-10">
-                <div className="flex items-center gap-4">
+            <div className="relative z-10 border-b border-zinc-800/90 bg-zinc-950/90 px-3 py-2.5 backdrop-blur-md sm:px-4">
+                <div className="relative flex min-h-9 items-center justify-between gap-2">
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                        className="relative z-10 inline-flex h-9 w-9 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white"
+                        title="Close lesson"
                     >
-                        <X size={20} />
+                        <X size={18} />
                     </button>
-                    <div>
-                        <h2 className="font-semibold text-white">{content.title}</h2>
-                        <div className="flex items-center gap-2 text-xs text-zinc-500">
-                            <span className="flex items-center gap-1">
-                                <Layers size={12} />
-                                {content.code_references.length} code references
-                            </span>
-                        </div>
-                    </div>
 
-                    <button
-                        onClick={handleExportCodeTour}
-                        disabled={downloading}
-                        className="p-2 ml-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-indigo-400 transition-colors"
-                        title="Export as VS Code Tour"
+                    <h2
+                        title={content.title}
+                        className="pointer-events-none absolute inset-x-16 mx-auto truncate px-1 text-center text-[15px] font-medium tracking-tight text-zinc-100 sm:text-base"
                     >
-                        {downloading ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
-                    </button>
+                        {content.title}
+                    </h2>
+
+                    <div className="relative z-10 flex items-center gap-1.5">
+                        <button
+                            onClick={handleTakeQuiz}
+                            disabled={generatingQuiz}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-indigo-500/35 bg-indigo-500/10 px-2.5 text-sm font-medium text-indigo-100 transition-colors hover:bg-indigo-500/20 disabled:opacity-50 sm:px-3"
+                        >
+                            {generatingQuiz ? <Loader2 className="animate-spin" size={16} /> : <Award size={16} />}
+                            <span className="hidden md:inline">{quizLabel}</span>
+                        </button>
+
+                        <details data-action-menu className="relative">
+                            <summary className="inline-flex h-9 list-none cursor-pointer items-center gap-1 rounded-md border border-zinc-700/90 bg-zinc-900/90 px-2.5 text-sm text-zinc-200 transition-colors hover:bg-zinc-800/90 [&::-webkit-details-marker]:hidden sm:px-3">
+                                <span className="hidden sm:inline">Actions</span>
+                                <ChevronDown size={14} className="text-zinc-400" />
+                            </summary>
+                            <div className="absolute right-0 mt-2 w-60 rounded-lg border border-zinc-700/90 bg-zinc-950/95 p-1.5 shadow-2xl">
+                                <p className="px-2 py-1 text-[11px] uppercase tracking-wider text-zinc-500">Practice</p>
+                                <button
+                                    onClick={() => {
+                                        closeActionMenus();
+                                        handleStartChallenge('bug_hunt');
+                                    }}
+                                    disabled={generatingChallenge}
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                                >
+                                    <span className="inline-flex items-center gap-2"><Bug size={14} className="text-red-400" />Bug Hunt</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        closeActionMenus();
+                                        handleStartChallenge('code_trace');
+                                    }}
+                                    disabled={generatingChallenge}
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                                >
+                                    <span className="inline-flex items-center gap-2"><Eye size={14} className="text-blue-400" />Trace Flow</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        closeActionMenus();
+                                        handleStartChallenge('fill_blank');
+                                    }}
+                                    disabled={generatingChallenge}
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                                >
+                                    <span className="inline-flex items-center gap-2"><Edit3 size={14} className="text-violet-300" />Fill Blanks</span>
+                                </button>
+                                <div className="my-1 h-px bg-zinc-800" />
+                                <p className="px-2 py-1 text-[11px] uppercase tracking-wider text-zinc-500">Lesson Tools</p>
+                                <button
+                                    onClick={() => {
+                                        closeActionMenus();
+                                        handleRegenerate();
+                                    }}
+                                    disabled={!onRegenerate || regenerating}
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        {regenerating ? <Loader2 size={14} className="animate-spin text-amber-300" /> : <RotateCw size={14} className="text-amber-300" />}
+                                        Regenerate lesson
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        closeActionMenus();
+                                        handleExportCodeTour();
+                                    }}
+                                    disabled={downloading}
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        {downloading ? <Loader2 size={14} className="animate-spin text-indigo-300" /> : <Download size={14} className="text-indigo-300" />}
+                                        Export CodeTour
+                                    </span>
+                                </button>
+                            </div>
+                        </details>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Challenge Buttons */}
-                    <div className="flex items-center gap-1 mr-2">
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 sm:pl-10">
+                    {repoName && (
+                        <RepoContextBadge
+                            repoName={repoName}
+                            compact
+                            className="max-w-[260px] border-zinc-800 bg-zinc-900/60"
+                        />
+                    )}
+                    <div tabIndex={0} className="group relative outline-none">
+                        <span className="inline-flex cursor-default items-center gap-1 rounded-md border border-zinc-800/90 bg-zinc-900/60 px-2 py-0.5">
+                            <Layers size={12} />
+                            {content.code_references.length} refs
+                        </span>
+                        {content.code_references.length > 0 && (
+                            <div className="pointer-events-none invisible absolute left-0 top-[calc(100%+8px)] z-30 w-[360px] max-w-[88vw] rounded-xl border border-zinc-800 bg-zinc-950/95 p-2 opacity-0 shadow-2xl transition-all duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                                <p className="px-1 pb-1 text-[10px] uppercase tracking-wider text-zinc-500">Code References</p>
+                                <div className="space-y-1">
+                                    {content.code_references.map((ref, index) => (
+                                        <div key={`${ref.file_path}:${ref.start_line}:${ref.end_line}:${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-900/70 px-2 py-1.5 text-xs">
+                                            <span className="truncate text-zinc-200">{ref.file_path}</span>
+                                            <span className="shrink-0 text-zinc-500">L{ref.start_line}-{ref.end_line}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    {persona && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-zinc-800/90 bg-zinc-900/60 px-2 py-0.5 text-zinc-300">
+                            <BookOpen size={10} />
+                            {persona.replace('_', ' ')}
+                        </span>
+                    )}
+                </div>
+
+                {content.cache_info && (
+                    <div className="mt-2 text-xs text-zinc-500">
+                        <span className="mr-3">Source: {content.cache_info.source}</span>
+                        {content.cache_info.generated_at && <span className="mr-3">Generated: {new Date(content.cache_info.generated_at).toLocaleString()}</span>}
+                        {content.cache_info.expires_at && <span>Expires: {new Date(content.cache_info.expires_at).toLocaleString()}</span>}
+                    </div>
+                )}
+
+                {!isFullscreen && (
+                    <div className="mt-3 grid grid-cols-2 gap-2 lg:hidden">
                         <button
-                            onClick={() => handleStartChallenge('bug_hunt')}
-                            disabled={generatingChallenge}
-                            className="bg-red-600/10 hover:bg-red-600/20 text-red-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                            title="Bug Hunt Challenge"
+                            onClick={() => setMobilePanel('content')}
+                            className={`rounded-lg px-3 py-2 text-sm ${mobilePanel === 'content' ? 'bg-zinc-800 text-white' : 'bg-zinc-900 text-zinc-400'}`}
                         >
-                            <Bug size={14} />
-                            <span className="hidden sm:inline">Bug Hunt</span>
+                            Lesson
                         </button>
                         <button
-                            onClick={() => handleStartChallenge('code_trace')}
-                            disabled={generatingChallenge}
-                            className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                            title="Code Trace Challenge"
+                            onClick={() => setMobilePanel('code')}
+                            className={`rounded-lg px-3 py-2 text-sm ${mobilePanel === 'code' ? 'bg-zinc-800 text-white' : 'bg-zinc-900 text-zinc-400'}`}
                         >
-                            <Eye size={14} />
-                            <span className="hidden sm:inline">Trace</span>
-                        </button>
-                        <button
-                            onClick={() => handleStartChallenge('fill_blank')}
-                            disabled={generatingChallenge}
-                            className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                            title="Fill in the Blank Challenge"
-                        >
-                            <Edit3 size={14} />
-                            <span className="hidden sm:inline">Fill</span>
+                            Code Evidence
                         </button>
                     </div>
-
-                    {/* Quiz Button */}
-                    <button
-                        onClick={handleTakeQuiz}
-                        disabled={generatingQuiz}
-                        className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-                    >
-                        {generatingQuiz ? <Loader2 className="animate-spin" size={16} /> : <Award size={16} />}
-                        {generatingQuiz ? 'Generating Quiz...' : 'Take Quiz'}
-                    </button>
-                </div>
+                )}
             </div>
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
                 {/* Left Panel: Content */}
                 {!isFullscreen && (
-                    <div className="w-1/2 overflow-y-auto border-r border-zinc-800 p-10">
+                    <div className={`${mobilePanel === 'content' ? 'block' : 'hidden'} lg:block w-full lg:w-1/2 overflow-y-auto border-r border-zinc-800 p-6 lg:p-10`}>
                         <div className="max-w-3xl mx-auto">
+                            {persona && (
+                                <div className="mb-5 rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2">
+                                    <p className="text-[10px] uppercase tracking-wider text-zinc-500">Mission Lens</p>
+                                    <p className="mt-0.5 text-sm text-zinc-300">
+                                        {PERSONA_MISSIONS[persona] || 'Focus on role-specific mastery for this lesson.'}
+                                    </p>
+                                </div>
+                            )}
                             {/* Mermaid Diagram - Now Rendered */}
                             {content.diagram_mermaid && (
                                 <MermaidDiagram
@@ -346,7 +492,7 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
                 )}
 
                 {/* Right Panel: Code Viewer */}
-                <div className={`${isFullscreen ? 'w-full' : 'w-1/2'} flex flex-col bg-zinc-950`}>
+                <div className={`${isFullscreen ? 'w-full flex' : mobilePanel === 'code' ? 'w-full flex' : 'hidden lg:flex lg:w-1/2'} flex-col bg-zinc-950`}>
                     {/* File Tabs */}
                     {content.code_references.length > 0 ? (
                         <>
@@ -381,6 +527,11 @@ export function LessonView({ repoId, content, onClose, onComplete, onGamificatio
 
                             {/* Code Display */}
                             <div className="flex-1 overflow-auto p-4 bg-[#0d0d12]">
+                                {hasQualityMeta && (
+                                    <div className="mb-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-2 text-xs text-zinc-400">
+                                        Evidence Score: sections {String(qualityMeta.section_score ?? 'n/a')} | persona {String(qualityMeta.persona_term_score ?? 'n/a')} | refs {String(qualityMeta.reference_count ?? content.code_references.length)}
+                                    </div>
+                                )}
                                 {activeRef ? (
                                     <div className="font-mono text-sm relative">
                                         <div className="mb-4 text-xs text-zinc-500 p-2 bg-zinc-900/50 rounded border border-zinc-800 flex justify-between">

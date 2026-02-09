@@ -24,9 +24,15 @@ services:
     environment:
       - DATABASE_URL=sqlite:///./data/codebaseqa.db
       - CHROMA_PERSIST_DIR=./data/chroma
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
       - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - CHAT_INTENT_ROUTING_ENABLED=${CHAT_INTENT_ROUTING_ENABLED:-true}
+      - CHAT_CONTENT_RERANK_ENABLED=${CHAT_CONTENT_RERANK_ENABLED:-true}
+      - CHAT_DOCS_FIRST_OVERVIEW_ENABLED=${CHAT_DOCS_FIRST_OVERVIEW_ENABLED:-true}
+      - CHAT_REDIS_CACHE_ENABLED=${CHAT_REDIS_CACHE_ENABLED:-false}
+      - RATE_LIMIT_REDIS_ENABLED=${RATE_LIMIT_REDIS_ENABLED:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - DEMO_MODE=${DEMO_MODE:-false}
       - SEED_DEMO=${SEED_DEMO:-false}
@@ -48,6 +54,14 @@ services:
       - DEMO_GRAPH_WINDOW_SECONDS=${DEMO_GRAPH_WINDOW_SECONDS:-60}
       - DEMO_CHALLENGE_REQUESTS=${DEMO_CHALLENGE_REQUESTS:-10}
       - DEMO_CHALLENGE_WINDOW_SECONDS=${DEMO_CHALLENGE_WINDOW_SECONDS:-60}
+    restart: always
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
     restart: always
 
 volumes:

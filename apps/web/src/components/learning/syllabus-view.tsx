@@ -4,23 +4,50 @@ import { useState } from 'react';
 import { Syllabus, Lesson } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Clock, ChevronDown,
-    Play, CheckCircle2, Circle
+    Clock, ChevronDown, RotateCw,
+    Play, CheckCircle2, Circle, Target
 } from 'lucide-react';
 
 interface SyllabusViewProps {
     syllabus: Syllabus;
-    onLessonSelect: (lesson: Lesson) => void;
+    selectedPersona?: string;
+    onRefreshTrack?: () => Promise<void> | void;
+    onLessonSelect: (lesson: Lesson, moduleId?: string) => void;
     completedLessons?: Set<string>;
 }
 
-export function SyllabusView({ syllabus, onLessonSelect, completedLessons = new Set() }: SyllabusViewProps) {
+export function SyllabusView({
+    syllabus,
+    selectedPersona,
+    onRefreshTrack,
+    onLessonSelect,
+    completedLessons = new Set(),
+}: SyllabusViewProps) {
     const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set([0])); // First module expanded by default
+    const [refreshing, setRefreshing] = useState(false);
 
     // Calculate progress
     const totalLessons = syllabus.modules.reduce((sum, m) => sum + m.lessons.length, 0);
     const completedCount = completedLessons.size;
     const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+    const moduleCompletion = syllabus.modules.filter((module) => {
+        const done = module.lessons.filter((lesson) => completedLessons.has(lesson.id)).length;
+        return done > 0;
+    }).length;
+    const competencyPercent = syllabus.modules.length > 0 ? Math.round((moduleCompletion / syllabus.modules.length) * 100) : 0;
+
+    const handleRefresh = async () => {
+        if (!onRefreshTrack || refreshing) return;
+        setRefreshing(true);
+        try {
+            await onRefreshTrack();
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    const cacheLabel = syllabus.cache_info?.source === 'cache' ? 'Cached Track' : 'Freshly Generated';
+    const expiresAt = syllabus.cache_info?.expires_at ? new Date(syllabus.cache_info.expires_at).toLocaleString() : null;
 
     const toggleModule = (index: number) => {
         setExpandedModules(prev => {
@@ -42,8 +69,12 @@ export function SyllabusView({ syllabus, onLessonSelect, completedLessons = new 
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center mb-10"
             >
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs text-slate-300 mb-4">
+                    <Target size={12} />
+                    Step 2: Track Map
+                </div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium mb-4 uppercase tracking-wider">
-                    {syllabus.persona.replace('_', ' ')} Track
+                    {(selectedPersona || syllabus.persona).replace('_', ' ')} Track
                 </div>
 
                 <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">
@@ -54,23 +85,60 @@ export function SyllabusView({ syllabus, onLessonSelect, completedLessons = new 
                     {syllabus.description}
                 </p>
 
-                {/* Progress Bar */}
-                <div className="max-w-sm mx-auto">
-                    <div className="flex items-center justify-between text-sm mb-2">
-                        <span className="text-slate-500">Course Progress</span>
-                        <span className="text-white font-semibold">{progressPercent}%</span>
+                <div className="mx-auto mb-6 flex max-w-2xl flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 text-left sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-xs uppercase tracking-wider text-slate-500">Track Status</p>
+                        <p className="text-sm text-slate-200">{cacheLabel}</p>
+                        {expiresAt && (
+                            <p className="text-xs text-slate-500 mt-1">Refreshes by: {expiresAt}</p>
+                        )}
                     </div>
-                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progressPercent}%` }}
-                            transition={{ duration: 1, ease: "easeOut" }}
-                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                        />
+                    <button
+                        onClick={handleRefresh}
+                        disabled={!onRefreshTrack || refreshing}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <RotateCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                        Regenerate Track
+                    </button>
+                </div>
+
+                {/* Progress Bars */}
+                <div className="grid max-w-2xl mx-auto gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                        <div className="flex items-center justify-between text-sm mb-2">
+                            <span className="text-slate-500">Lesson Progress</span>
+                            <span className="text-white font-semibold">{progressPercent}%</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${progressPercent}%` }}
+                                transition={{ duration: 1, ease: "easeOut" }}
+                                className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">
+                            {completedCount} of {totalLessons} lessons completed
+                        </p>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                        {completedCount} of {totalLessons} lessons completed
-                    </p>
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                        <div className="flex items-center justify-between text-sm mb-2">
+                            <span className="text-slate-500">Competency Coverage</span>
+                            <span className="text-white font-semibold">{competencyPercent}%</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${competencyPercent}%` }}
+                                transition={{ duration: 1, ease: "easeOut" }}
+                                className="h-full bg-gradient-to-r from-emerald-500 to-lime-400"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">
+                            {moduleCompletion} of {syllabus.modules.length} modules touched
+                        </p>
+                    </div>
                 </div>
             </motion.div>
 
@@ -155,7 +223,7 @@ export function SyllabusView({ syllabus, onLessonSelect, completedLessons = new 
                                                         key={lesson.id}
                                                         lesson={lesson}
                                                         isCompleted={completedLessons.has(lesson.id)}
-                                                        onClick={() => onLessonSelect(lesson)}
+                                                        onClick={() => onLessonSelect(lesson, `module-${mIdx + 1}`)}
                                                     />
                                                 ))}
                                             </div>

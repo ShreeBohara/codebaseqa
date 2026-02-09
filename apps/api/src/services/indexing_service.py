@@ -6,6 +6,7 @@ Handles cloning, parsing, and embedding of code repositories.
 import hashlib
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -23,9 +24,16 @@ logger = logging.getLogger(__name__)
 # File extensions to index
 INDEXED_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx",
-    ".java", ".go", ".rs", ".c", ".cpp", ".h",
-    ".rb", ".php", ".swift", ".kt",
+    ".java", ".go", ".rs", ".c", ".cpp", ".h", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".ipp", ".tpp",
+    ".cs", ".csx",
+    ".rb", ".rake", ".gemspec", ".php", ".swift", ".kt",
+    ".erb",
     ".md", ".json",  # Add README and config files
+}
+
+# Extensionless (or special-name) files to index for Rails basics.
+INDEXED_FILENAMES = {
+    "gemfile", "rakefile", "config.ru",
 }
 
 # Important files that get special treatment (file-level summary chunk)
@@ -138,7 +146,9 @@ class IndexingService:
                 file_path = Path(root) / filename
 
                 # Check extension
-                if file_path.suffix.lower() not in INDEXED_EXTENSIONS:
+                suffix = file_path.suffix.lower()
+                filename_lower = file_path.name.lower()
+                if suffix not in INDEXED_EXTENSIONS and filename_lower not in INDEXED_FILENAMES:
                     continue
 
                 # Check file size
@@ -157,6 +167,97 @@ class IndexingService:
 
         return files
 
+    def _is_trivial_reexport(self, content: str) -> bool:
+        compact = re.sub(r"\s+", " ", content.strip().lower())
+        if compact in {"export {};", "export {}"}:
+            return True
+        if len(compact) <= 64 and compact.startswith("export"):
+            return True
+        return False
+
+    def _chunk_markdown_by_headings(self, content: str, max_chunk_len: int = 2200) -> List[Dict[str, Any]]:
+        """Chunk markdown content by heading boundaries with size caps."""
+        lines = content.splitlines()
+        if not lines:
+            return []
+
+        sections: List[Dict[str, Any]] = []
+        current_title = "Document"
+        current_start = 1
+        current_lines: List[str] = []
+
+        for line_no, line in enumerate(lines, start=1):
+            heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+            if heading_match and current_lines:
+                section_content = "\n".join(current_lines).strip()
+                if section_content:
+                    sections.append(
+                        {
+                            "title": current_title,
+                            "start_line": current_start,
+                            "end_line": line_no - 1,
+                            "content": section_content,
+                        }
+                    )
+                current_title = heading_match.group(2).strip()
+                current_start = line_no
+                current_lines = [line]
+            else:
+                current_lines.append(line)
+
+        if current_lines:
+            section_content = "\n".join(current_lines).strip()
+            if section_content:
+                sections.append(
+                    {
+                        "title": current_title,
+                        "start_line": current_start,
+                        "end_line": len(lines),
+                        "content": section_content,
+                    }
+                )
+
+        if not sections:
+            return []
+
+        chunked: List[Dict[str, Any]] = []
+        for section in sections:
+            section_lines = section["content"].splitlines()
+            line_cursor = section["start_line"]
+            buffer: List[str] = []
+
+            for raw_line in section_lines:
+                prospective = "\n".join(buffer + [raw_line]).strip()
+                if buffer and len(prospective) > max_chunk_len:
+                    chunk_content = "\n".join(buffer).strip()
+                    if chunk_content:
+                        chunked.append(
+                            {
+                                "title": section["title"],
+                                "start_line": line_cursor,
+                                "end_line": line_cursor + max(0, len(buffer) - 1),
+                                "content": chunk_content,
+                            }
+                        )
+                    line_cursor += len(buffer)
+                    buffer = [raw_line]
+                else:
+                    buffer.append(raw_line)
+
+            if buffer:
+                chunk_content = "\n".join(buffer).strip()
+                if chunk_content:
+                    chunked.append(
+                        {
+                            "title": section["title"],
+                            "start_line": line_cursor,
+                            "end_line": line_cursor + max(0, len(buffer) - 1),
+                            "content": chunk_content,
+                        }
+                    )
+
+        return chunked
+
     async def _index_raw_file(
         self,
         repo: Repository,
@@ -170,8 +271,22 @@ class IndexingService:
         line_count = content.count('\n') + 1
 
         # Determine language
-        lang_map = {'.json': 'json', '.md': 'markdown', '.yml': 'yaml', '.yaml': 'yaml'}
-        language = lang_map.get(file_path.suffix.lower(), 'text')
+        lang_map = {
+            '.json': 'json',
+            '.md': 'markdown',
+            '.yml': 'yaml',
+            '.yaml': 'yaml',
+            '.erb': 'erb',
+            '.rb': 'ruby',
+            '.rake': 'ruby',
+            '.gemspec': 'ruby',
+            '.ru': 'ruby',
+        }
+        filename_lower = file_path.name.lower()
+        if filename_lower in {"gemfile", "rakefile"}:
+            language = "ruby"
+        else:
+            language = lang_map.get(file_path.suffix.lower(), 'text')
 
         # Create CodeFile record
         db_file = CodeFile(
@@ -190,47 +305,76 @@ class IndexingService:
         self._db.refresh(db_file)
 
         chunks_data = []
-
-        # For important files, index the whole content (truncated if needed)
         is_important = file_path.name.lower() in IMPORTANT_FILES
-        max_content_len = 5000 if is_important else 3000
+        chunk_specs: List[Dict[str, Any]] = []
 
-        chunk_content = content[:max_content_len]
-        if len(content) > max_content_len:
-            chunk_content += "\n... [truncated]"
+        if language == "markdown" and len(content) > 2200:
+            md_chunks = self._chunk_markdown_by_headings(content, max_chunk_len=2200 if is_important else 1800)
+            for idx, md_chunk in enumerate(md_chunks):
+                chunk_type = "file_summary" if is_important and idx == 0 else "raw_file"
+                chunk_specs.append(
+                    {
+                        "chunk_type": chunk_type,
+                        "chunk_name": md_chunk["title"] or file_path.name,
+                        "content": md_chunk["content"],
+                        "start_line": md_chunk["start_line"],
+                        "end_line": md_chunk["end_line"],
+                    }
+                )
+        else:
+            max_content_len = 5000 if is_important else 3000
+            chunk_content = content[:max_content_len]
+            if len(content) > max_content_len:
+                chunk_content += "\n... [truncated]"
+            chunk_specs.append(
+                {
+                    "chunk_type": "file_summary" if is_important else "raw_file",
+                    "chunk_name": file_path.name,
+                    "content": chunk_content,
+                    "start_line": 1,
+                    "end_line": min(line_count, 200),
+                }
+            )
 
-        # Create single chunk for entire file
-        db_chunk = CodeChunk(
-            repository_id=repo.id,
-            file_id=db_file.id,
-            chunk_type="raw_file" if not is_important else "file_summary",
-            chunk_name=file_path.name,
-            content=chunk_content,
-            content_hash=hashlib.sha256(chunk_content.encode()).hexdigest(),
-            start_line=1,
-            end_line=min(line_count, 200),
-            docstring=f"Raw content of {file_path.name}",
-            context_before="",
-        )
-        self._db.add(db_chunk)
-        self._db.commit()
-        self._db.refresh(db_chunk)
+        db_chunks = []
+        for spec in chunk_specs:
+            db_chunk = CodeChunk(
+                repository_id=repo.id,
+                file_id=db_file.id,
+                chunk_type=spec["chunk_type"],
+                chunk_name=spec["chunk_name"],
+                content=spec["content"],
+                content_hash=hashlib.sha256(spec["content"].encode()).hexdigest(),
+                start_line=spec["start_line"],
+                end_line=spec["end_line"],
+                docstring=f"Raw content of {file_path.name}",
+                context_before="",
+            )
+            db_chunks.append(db_chunk)
 
-        chunks_data.append({
-            "id": db_chunk.id,
-            "content": f"FILE: {file_path.name}\n{chunk_content}",
-            "metadata": {
-                "file_path": relative_path,
-                "chunk_type": db_chunk.chunk_type,
-                "chunk_name": file_path.name,
-                "start_line": 1,
-                "end_line": min(line_count, 200),
-                "language": language,
-                "is_important": is_important,
-            },
-        })
+        if db_chunks:
+            self._db.add_all(db_chunks)
+            self._db.commit()
 
-        logger.info(f"Indexed raw file: {file_path.name} ({len(chunk_content)} chars)")
+        for db_chunk in db_chunks:
+            self._db.refresh(db_chunk)
+            chunks_data.append(
+                {
+                    "id": db_chunk.id,
+                    "content": f"FILE: {file_path.name}\n{db_chunk.content}",
+                    "metadata": {
+                        "file_path": relative_path,
+                        "chunk_type": db_chunk.chunk_type,
+                        "chunk_name": db_chunk.chunk_name or file_path.name,
+                        "start_line": db_chunk.start_line,
+                        "end_line": db_chunk.end_line,
+                        "language": language,
+                        "is_important": is_important,
+                    },
+                }
+            )
+
+        logger.info("Indexed raw file: %s (%s chunks)", file_path.name, len(chunks_data))
         return chunks_data
 
     async def _parse_file(
@@ -251,7 +395,11 @@ class IndexingService:
         if not parser:
             return await self._index_raw_file(repo, file_path, repo_path, content)
 
-        result = parser.parse(content, str(file_path))
+        try:
+            result = parser.parse(content, str(file_path))
+        except Exception as exc:
+            logger.warning("Parser failed for %s, falling back to raw indexing: %s", file_path, exc)
+            return await self._index_raw_file(repo, file_path, repo_path, content)
 
         # Create CodeFile record
         relative_path = str(file_path.relative_to(repo_path))
@@ -284,34 +432,37 @@ class IndexingService:
             if len(content) > 3000:
                 summary_content += "\n... [truncated]"
 
-            summary_chunk = CodeChunk(
-                repository_id=repo.id,
-                file_id=db_file.id,
-                chunk_type="file_summary",
-                chunk_name=file_path.name,
-                content=summary_content,
-                content_hash=hashlib.sha256(summary_content.encode()).hexdigest(),
-                start_line=1,
-                end_line=min(result.line_count, 100),
-                docstring=f"File summary: {file_path.name}",
-                context_before="",
-            )
-            db_chunks.append(summary_chunk)
+            if not self._is_trivial_reexport(summary_content):
+                summary_chunk = CodeChunk(
+                    repository_id=repo.id,
+                    file_id=db_file.id,
+                    chunk_type="file_summary",
+                    chunk_name=file_path.name,
+                    content=summary_content,
+                    content_hash=hashlib.sha256(summary_content.encode()).hexdigest(),
+                    start_line=1,
+                    end_line=min(result.line_count, 100),
+                    docstring=f"File summary: {file_path.name}",
+                    context_before="",
+                )
+                db_chunks.append(summary_chunk)
 
-            chunks_data.append({
-                "chunk": summary_chunk,
-                "content": f"FILE: {file_path.name}\n{summary_content}",
-                "metadata": {
-                    "file_path": relative_path,
-                    "chunk_type": "file_summary",
-                    "chunk_name": file_path.name,
-                    "start_line": 1,
-                    "end_line": min(result.line_count, 100),
-                    "language": result.language,
-                    "is_important": True,
-                },
-            })
-            logger.info(f"Created file summary chunk for important file: {file_path.name}")
+                chunks_data.append({
+                    "chunk": summary_chunk,
+                    "content": f"FILE: {file_path.name}\n{summary_content}",
+                    "metadata": {
+                        "file_path": relative_path,
+                        "chunk_type": "file_summary",
+                        "chunk_name": file_path.name,
+                        "start_line": 1,
+                        "end_line": min(result.line_count, 100),
+                        "language": result.language,
+                        "is_important": True,
+                    },
+                })
+                logger.info(f"Created file summary chunk for important file: {file_path.name}")
+            else:
+                logger.info("Skipped trivial file summary for %s", file_path.name)
 
         for chunk in result.chunks:
             chunk_hash = hashlib.sha256(chunk.content.encode()).hexdigest()

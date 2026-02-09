@@ -25,7 +25,7 @@ CodebaseQA helps developers understand unfamiliar repositories quickly with:
 - **Interactive lessons** with file-linked references and Mermaid diagrams
 - **Quizzes and coding challenges** (bug hunt, code trace, fill-in-the-blank)
 - **Gamification** (XP, levels, streaks, achievements, activity heatmap)
-- **Dependency graph visualization** with multiple layouts and PNG export
+- **Full-workspace dependency graph visualization** with adaptive module-first overview, scoped drill-down, and PNG export
 
 It supports both a web UI and a CLI workflow.
 
@@ -43,7 +43,7 @@ It supports both a web UI and a CLI workflow.
 | **Quiz Generation** | Lesson-based multiple-choice quizzes |
 | **Challenges** | Bug Hunt, Code Trace, Fill-in-the-Blank generation + validation |
 | **Gamification** | XP rewards, 6 levels, streak tracking, achievements, dashboard analytics |
-| **Dependency Graph** | Interactive graph with hierarchy/radial/tree layouts, search, regenerate, PNG export |
+| **Dependency Graph** | Full-workspace intelligent graph with adaptive module overview, focus mode, progressive edge reveal, deterministic extraction, and PNG export |
 | **CodeTour Export** | Export lesson content as VS Code CodeTour (`.tour`) |
 | **CLI Tooling** | Index, ask, search, list, lessons, and CodeTour export from terminal |
 | **Demo Bootstrap** | Seed a demo repository via API/UI (`/api/repos/demo/seed`) |
@@ -174,6 +174,10 @@ CodebaseQA reads settings from environment variables (via `apps/api/src/config.p
 | `OPENAI_EMBEDDING_MAX_TOKENS_PER_REQUEST` | Max total tokens per embedding request batch | `250000` |
 | `OPENAI_EMBEDDING_MAX_TEXTS_PER_REQUEST` | Max chunk count per embedding request batch | `128` |
 | `OPENAI_EMBEDDING_REQUEST_CONCURRENCY` | Max concurrent embedding requests | `1` |
+| `OPENAI_EMBEDDING_MIN_SECONDS_BETWEEN_REQUESTS` | Minimum delay between embedding requests | `0.0` |
+| `OPENAI_EMBEDDING_RATE_LIMIT_MAX_RETRIES` | Retry attempts for embedding `HTTP 429` responses | `6` |
+| `OPENAI_EMBEDDING_RATE_LIMIT_BASE_BACKOFF_SECONDS` | Base seconds for exponential backoff on `HTTP 429` | `1.0` |
+| `OPENAI_EMBEDDING_RATE_LIMIT_MAX_BACKOFF_SECONDS` | Maximum wait per retry on `HTTP 429` | `30.0` |
 | `ANTHROPIC_API_KEY` | Anthropic API key | unset |
 | `ANTHROPIC_MODEL` | Anthropic model | `claude-sonnet-4-20250514` |
 | `OLLAMA_BASE_URL` | Ollama host URL | `http://localhost:11434` |
@@ -184,7 +188,7 @@ Notes:
 
 - Docker compose currently passes `OPENAI_API_KEY` by default; if you want Anthropic/Ollama in Docker, add those env vars in `docker/docker-compose.yml`.
 - For local development, all variables above can be set directly in your shell or `.env`.
-- Large repositories can trigger temporary embedding rate limits (`HTTP 429`). Indexing retries automatically; tune the three `OPENAI_EMBEDDING_*` controls above if needed.
+- Large repositories can trigger temporary embedding rate limits (`HTTP 429`). Indexing retries automatically; tune the `OPENAI_EMBEDDING_*` controls above (batch size, pacing, and retry backoff) if needed.
 
 ---
 
@@ -294,7 +298,7 @@ codebaseqa/
 
 Backend highlights:
 
-- Tree-sitter semantic parsing for Python, JavaScript, TypeScript, Java
+- Tree-sitter semantic parsing for Python, JavaScript, TypeScript, Java, Go, Rust, C#, C++, Ruby
 - Hybrid retrieval (vector + keyword) and query expansion
 - LLM-based reranking for improved relevance
 - SQLite metadata + Chroma vector persistence

@@ -176,6 +176,10 @@ class ChatSession(Base):
     repository = relationship("Repository", back_populates="chat_sessions")
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        Index("ix_chat_sessions_repo_updated_at", "repository_id", "updated_at"),
+    )
+
 
 class ChatMessage(Base):
     """Individual message in a chat session."""
@@ -189,12 +193,17 @@ class ChatMessage(Base):
 
     # Retrieved context
     retrieved_chunks = Column(JSON, default=list)
+    retrieval_meta = Column(JSON, default=dict)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
     session = relationship("ChatSession", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_chat_messages_session_created_at", "session_id", "created_at"),
+    )
 
 
 class LearningPath(Base):
@@ -230,6 +239,30 @@ class LearningSyllabus(Base):
 
     __table_args__ = (
         Index("ix_learning_syllabi_repo_persona", "repository_id", "persona"),
+    )
+
+
+class LearningLesson(Base):
+    """Cached lesson payloads to avoid regeneration."""
+    __tablename__ = "learning_lessons"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False)
+
+    persona = Column(String(50), nullable=True)
+    lesson_id = Column(String(100), nullable=False)
+    module_id = Column(String(100), nullable=True)
+    lesson_json = Column(JSON, nullable=False)
+    quality_meta = Column(JSON, nullable=True)
+    prompt_version = Column(String(50), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_learning_lessons_repo_persona_lesson", "repository_id", "persona", "lesson_id"),
+        Index("ix_learning_lessons_repo_lesson", "repository_id", "lesson_id"),
+        Index("ix_learning_lessons_expiry", "expires_at"),
     )
 
 
@@ -311,7 +344,21 @@ class Achievement(Base):
     )
 
 
+class GraphNodeInteraction(Base):
+    """Unique graph node views for graph exploration achievements."""
+    __tablename__ = "graph_node_interactions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False)
+    node_id = Column(String(1000), nullable=False)
+    viewed_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_graph_node_interactions_repo", "repository_id"),
+        Index("ix_graph_node_interactions_repo_node", "repository_id", "node_id", unique=True),
+    )
+
+
 def init_db(engine):
     """Create all tables."""
     Base.metadata.create_all(bind=engine)
-

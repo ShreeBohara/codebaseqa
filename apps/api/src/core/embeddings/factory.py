@@ -16,6 +16,10 @@ def create_embedding_service() -> BaseEmbeddings:
             max_tokens_per_request=settings.openai_embedding_max_tokens_per_request,
             max_texts_per_request=settings.openai_embedding_max_texts_per_request,
             request_concurrency=settings.openai_embedding_request_concurrency,
+            min_seconds_between_requests=settings.openai_embedding_min_seconds_between_requests,
+            rate_limit_max_retries=settings.openai_embedding_rate_limit_max_retries,
+            rate_limit_base_backoff_seconds=settings.openai_embedding_rate_limit_base_backoff_seconds,
+            rate_limit_max_backoff_seconds=settings.openai_embedding_rate_limit_max_backoff_seconds,
         )
     elif provider == "ollama":
         return OllamaEmbeddings(

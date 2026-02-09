@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Code2, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { DemoBanner } from '@/components/common/demo-banner';
+import { BrandLogo } from '@/components/common/brand-logo';
+import { RepoContextBadge } from '@/components/common/repo-context-badge';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,23 +41,20 @@ export default async function ChatPage({ params }: ChatPageProps) {
                         <span className="text-sm">Repositories</span>
                     </Link>
 
-                    <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-                            <Code2 className="text-white" size={14} />
-                        </div>
-                        <span className="font-semibold text-white">CodebaseQA</span>
-                    </div>
+                    <BrandLogo size="sm" />
 
-                    <div className="text-sm text-zinc-400">
-                        {repo.github_owner}/{repo.github_name}
-                    </div>
+                    <RepoContextBadge
+                        repoName={`${repo.github_owner}/${repo.github_name}`}
+                        compact
+                        className="max-w-[280px]"
+                    />
                 </div>
             </header>
 
             <DemoBanner />
 
             {/* Chat Interface */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-hidden">
                 <ChatInterface
                     sessionId={session.id}
                     repoName={`${repo.github_owner}/${repo.github_name}`}

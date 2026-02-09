@@ -12,6 +12,15 @@ interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    meta?: {
+        intent?: string;
+        profile?: string;
+        grounding?: string;
+        latency_ms?: {
+            retrieval?: number;
+            rerank?: number;
+        };
+    };
     sources?: Array<{
         file: string;
         content: string;
@@ -53,7 +62,12 @@ const suggestedActions = [
 
 export function ChatInterface({ sessionId, repoName, initialMessages = [] }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<Message[]>(() =>
-        initialMessages.map((m) => ({ id: m.id, role: m.role, content: m.content }))
+        initialMessages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            meta: (m.retrieval_meta as Message['meta']) || undefined,
+        }))
     );
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -81,6 +95,8 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
             for await (const chunk of api.streamChat(sessionId, userMessage.content)) {
                 if (chunk.type === 'sources') {
                     setMessages((prev) => prev.map((m) => m.id === assistantMessage.id ? { ...m, sources: chunk.sources } : m));
+                } else if (chunk.type === 'meta') {
+                    setMessages((prev) => prev.map((m) => m.id === assistantMessage.id ? { ...m, meta: chunk.meta } : m));
                 } else if (chunk.type === 'content') {
                     setMessages((prev) => prev.map((m) => m.id === assistantMessage.id ? { ...m, content: m.content + (chunk.content || '') } : m));
                 } else if (chunk.type === 'done') {
@@ -119,7 +135,7 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
         <div className="flex flex-col h-full bg-zinc-950 relative">
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-8 scroll-smooth">
-                <div className="max-w-4xl mx-auto space-y-8">
+                <div className={`max-w-4xl mx-auto ${messages.length === 0 ? 'h-full' : 'space-y-8'}`}>
                     <AnimatePresence mode="popLayout">
                         {messages.length === 0 ? (
                             // Empty State with color
@@ -127,7 +143,7 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="flex flex-col items-center justify-center min-h-[60vh] relative pb-32"
+                                className="flex flex-col items-center justify-center h-full relative pb-24 md:pb-28"
                             >
                                 {/* Background Gradient Blob */}
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] -z-10" />
@@ -271,6 +287,26 @@ export function ChatInterface({ sessionId, repoName, initialMessages = [] }: Cha
                                                             </div>
                                                         )}
                                                     </div>
+
+                                                    {message.meta && !message.isStreaming && (
+                                                        <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+                                                            {message.meta.intent && (
+                                                                <span className="rounded-md border border-zinc-700 px-2 py-1">
+                                                                    Intent: {message.meta.intent}
+                                                                </span>
+                                                            )}
+                                                            {message.meta.profile && (
+                                                                <span className="rounded-md border border-zinc-700 px-2 py-1">
+                                                                    Profile: {message.meta.profile}
+                                                                </span>
+                                                            )}
+                                                            {message.meta.grounding && (
+                                                                <span className="rounded-md border border-zinc-700 px-2 py-1">
+                                                                    Grounding: {message.meta.grounding}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
 
                                                     {/* Sources */}
                                                     {message.sources && message.sources.length > 0 && !message.isStreaming && (

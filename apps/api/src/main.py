@@ -12,8 +12,9 @@ from sqlalchemy import text
 
 from src.api.routes import chat, learning, platform, repos, search
 from src.config import settings
-from src.dependencies import get_db_engine, get_session_factory, get_vector_store
+from src.dependencies import get_chat_cache, get_db_engine, get_redis_client, get_session_factory, get_vector_store
 from src.models.database import init_db
+from src.models.migrations import run_pending_migrations
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     # Initialize database
     engine = get_db_engine()
     init_db(engine)
+    run_pending_migrations(engine)
     logger.info("Database initialized")
 
     # Initialize vector store
@@ -55,6 +57,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down CodebaseQA API...")
     await vector_store.close()
+    redis_client = get_redis_client()
+    if redis_client is not None:
+        try:
+            await redis_client.aclose()
+        except Exception:
+            pass
 
 
 # Create FastAPI app
@@ -200,8 +208,15 @@ async def get_openapi_yaml():
 async def get_cache_stats():
     """Get LLM cache statistics."""
     from src.core.cache.llm_cache import get_llm_cache
+    from src.core.rate_limit import get_rate_limit_stats
+
     cache = get_llm_cache()
-    return cache.stats()
+    chat_cache = get_chat_cache()
+    return {
+        "llm_cache": cache.stats(),
+        "chat_cache": chat_cache.stats(),
+        "rate_limit": await get_rate_limit_stats(),
+    }
 
 
 # Global exception handler

@@ -29,11 +29,12 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   retrieved_chunks?: Array<{ id: string; file: string }>;
+  retrieval_meta?: Record<string, unknown>;
   created_at: string;
 }
 
 export interface StreamingChunk {
-  type: 'content' | 'sources' | 'done' | 'error';
+  type: 'content' | 'sources' | 'meta' | 'done' | 'error';
   content?: string;
   sources?: Array<{
     file: string;
@@ -42,6 +43,16 @@ export interface StreamingChunk {
     end_line: number;
     score: number;
   }>;
+  meta?: {
+    intent?: string;
+    profile?: string;
+    grounding?: string;
+    latency_ms?: {
+      retrieval?: number;
+      rerank?: number;
+    };
+    debug?: Record<string, unknown>;
+  };
   error?: string;
 }
 
@@ -83,6 +94,8 @@ export interface Syllabus {
   title: string;
   description: string;
   modules: Module[];
+  quality_meta?: Record<string, unknown> | null;
+  cache_info?: CacheInfo | null;
 }
 
 export interface CodeReference {
@@ -99,6 +112,18 @@ export interface LessonContent {
   content_markdown: string;
   code_references: CodeReference[];
   diagram_mermaid?: string;
+  persona?: string | null;
+  module_id?: string | null;
+  quality_meta?: Record<string, unknown> | null;
+  cache_info?: CacheInfo | null;
+}
+
+export interface CacheInfo {
+  source: string;
+  generated_at?: string | null;
+  expires_at?: string | null;
+  prompt_version?: string | null;
+  cache_hit?: boolean;
 }
 
 export interface CodeTour {
@@ -432,23 +457,70 @@ class ApiClient {
     return res.json();
   }
 
-  async generateSyllabus(repoId: string, persona: string): Promise<Syllabus> {
+  async generateSyllabus(
+    repoId: string,
+    persona: string,
+    options?: { forceRegenerate?: boolean; includeQualityMeta?: boolean }
+  ): Promise<Syllabus> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/curriculum`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ persona }),
+      body: JSON.stringify({
+        persona,
+        force_regenerate: options?.forceRegenerate ?? false,
+        include_quality_meta: options?.includeQualityMeta ?? false,
+      }),
     });
     await this.ensureOk(res, 'Failed to generate syllabus');
     return res.json();
   }
 
-  async generateLesson(repoId: string, lessonId: string, title: string): Promise<LessonContent> {
+  async getSyllabus(
+    repoId: string,
+    persona: string,
+    options?: { refresh?: boolean; includeQualityMeta?: boolean }
+  ): Promise<Syllabus> {
+    const query = new URLSearchParams();
+    query.set('persona', persona);
+    if (options?.refresh) query.set('refresh', 'true');
+    if (options?.includeQualityMeta) query.set('include_quality_meta', 'true');
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/curriculum?${query.toString()}`);
+    await this.ensureOk(res, 'Failed to fetch syllabus');
+    return res.json();
+  }
+
+  async generateLesson(
+    repoId: string,
+    lessonId: string,
+    title: string,
+    options?: { persona?: string; moduleId?: string; forceRegenerate?: boolean }
+  ): Promise<LessonContent> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        persona: options?.persona,
+        module_id: options?.moduleId,
+        force_regenerate: options?.forceRegenerate ?? false,
+      }),
     });
     await this.ensureOk(res, 'Failed to generate lesson content');
+    return res.json();
+  }
+
+  async getLesson(
+    repoId: string,
+    lessonId: string,
+    persona: string,
+    options?: { refresh?: boolean; moduleId?: string }
+  ): Promise<LessonContent> {
+    const query = new URLSearchParams();
+    query.set('persona', persona);
+    if (options?.refresh) query.set('refresh', 'true');
+    if (options?.moduleId) query.set('module_id', options.moduleId);
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}?${query.toString()}`);
+    await this.ensureOk(res, 'Failed to fetch lesson content');
     return res.json();
   }
 
@@ -462,8 +534,22 @@ class ApiClient {
     return res.json();
   }
 
-  async getDependencyGraph(repoId: string): Promise<DependencyGraph> {
-    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph`);
+  async getDependencyGraph(
+    repoId: string,
+    params?: {
+      granularity?: 'auto' | 'module' | 'file';
+      scope?: string;
+      focusNode?: string;
+      hops?: number;
+    }
+  ): Promise<DependencyGraph> {
+    const query = new URLSearchParams();
+    if (params?.granularity) query.set('granularity', params.granularity);
+    if (params?.scope) query.set('scope', params.scope);
+    if (params?.focusNode) query.set('focus_node', params.focusNode);
+    if (typeof params?.hops === 'number') query.set('hops', String(params.hops));
+    const qs = query.toString();
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph${qs ? `?${qs}` : ''}`);
     await this.ensureOk(res, 'Failed to generate graph');
     return res.json();
   }
@@ -481,18 +567,30 @@ class ApiClient {
     return res.json();
   }
 
-  async getCompletedLessons(repoId: string): Promise<string[]> {
-    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/progress`);
+  async getCompletedLessons(repoId: string, persona?: string): Promise<string[]> {
+    const query = new URLSearchParams();
+    if (persona) query.set('persona', persona);
+    const suffix = query.toString();
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/progress${suffix ? `?${suffix}` : ''}`);
     await this.ensureOk(res, 'Failed to fetch lesson progress');
     const data = await res.json();
     return data.completed_lessons || [];
   }
 
-  async completeLesson(repoId: string, lessonId: string, timeSpentSeconds: number): Promise<LessonCompleteResponse> {
+  async completeLesson(
+    repoId: string,
+    lessonId: string,
+    timeSpentSeconds: number,
+    options?: { persona?: string; moduleId?: string }
+  ): Promise<LessonCompleteResponse> {
     const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ time_spent_seconds: timeSpentSeconds }),
+      body: JSON.stringify({
+        time_spent_seconds: timeSpentSeconds,
+        persona: options?.persona,
+        module_id: options?.moduleId,
+      }),
     });
     await this.ensureOk(res, 'Failed to complete lesson');
     return res.json();
@@ -513,6 +611,31 @@ class ApiClient {
       method: 'POST',
     });
     await this.ensureOk(res, 'Failed to record graph view');
+    return res.json();
+  }
+
+  async recordGraphNodeViewed(
+    repoId: string,
+    nodeId: string
+  ): Promise<{
+    unique_nodes_viewed: number;
+    new_view: boolean;
+    achievements_unlocked?: Array<{
+      key: string;
+      name: string;
+      description: string;
+      icon: string;
+      category: string;
+      xp_reward: number;
+      requirement?: number;
+    }>;
+  }> {
+    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/graph/nodes/viewed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: nodeId }),
+    });
+    await this.ensureOk(res, 'Failed to record graph node interaction');
     return res.json();
   }
 
@@ -550,8 +673,13 @@ class ApiClient {
     return res.json();
   }
 
-  async exportCodeTour(repoId: string, lessonId: string): Promise<CodeTour> {
-    const res = await fetch(`${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/export/codetour`);
+  async exportCodeTour(repoId: string, lessonId: string, options?: { persona?: string }): Promise<CodeTour> {
+    const query = new URLSearchParams();
+    if (options?.persona) query.set('persona', options.persona);
+    const suffix = query.toString();
+    const res = await fetch(
+      `${this.baseUrl}/api/learning/${repoId}/lessons/${lessonId}/export/codetour${suffix ? `?${suffix}` : ''}`
+    );
     await this.ensureOk(res, 'Failed to export CodeTour');
     return res.json();
   }
@@ -569,10 +697,25 @@ export interface GraphNode {
   label: string;
   type: string;
   description: string;
+  entity?: 'file' | 'module';
   group?: string;
   importance?: number;
   loc?: number;
   exports?: string[];
+  module_key?: string;
+  member_count?: number;
+  loc_total?: number;
+  dominant_types?: string[];
+  top_files?: string[];
+  internal_edge_count?: number;
+  external_edge_count?: number;
+  internal_density?: number;
+  metrics?: {
+    in_degree: number;
+    out_degree: number;
+    degree: number;
+    centrality: number;
+  };
 }
 
 export interface GraphEdge {
@@ -580,12 +723,47 @@ export interface GraphEdge {
   target: string;
   label: string;
   type?: string;
+  relation?: string;
   weight?: number;
+  confidence?: number;
+  rank?: number;
+  aggregated_count?: number;
+}
+
+export interface DependencyGraphMeta {
+  generated_at: string;
+  source: 'deterministic' | 'hybrid';
+  truncated: boolean;
+  view?: 'file' | 'module';
+  scope?: string;
+  recommended_entry?: 'file' | 'module';
+  entry_reason?: string;
+  cross_module_ratio?: number;
+  internal_edges_summarized?: number;
+  raw_stats?: {
+    nodes: number;
+    edges: number;
+    clusters: number;
+    density: number;
+  };
+  edge_budget?: {
+    per_node?: number;
+    max_edges?: number;
+    hops?: number;
+    focus?: boolean;
+  };
+  stats: {
+    nodes: number;
+    edges: number;
+    clusters: number;
+    density: number;
+  };
 }
 
 export interface DependencyGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  meta?: DependencyGraphMeta;
 }
 
 export const api = new ApiClient();

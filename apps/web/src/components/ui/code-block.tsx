@@ -23,8 +23,13 @@ export function CodeBlock({ code, language = 'typescript', filename, startLine, 
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Detect language from filename if not provided
-    const detectedLang = language || detectLanguage(filename || '');
+    // Detect language from filename if not provided.
+    const requestedLang = language || detectLanguage(filename || '');
+    const supportedLanguages = (SyntaxHighlighter as unknown as { supportedLanguages?: string[] }).supportedLanguages;
+    const detectedLang =
+        requestedLang === 'erb' && (!supportedLanguages || !supportedLanguages.includes('erb'))
+            ? 'ruby'
+            : requestedLang;
 
     return (
         <motion.div
@@ -84,17 +89,38 @@ export function CodeBlock({ code, language = 'typescript', filename, startLine, 
     );
 }
 
-function detectLanguage(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase() || '';
+export function detectLanguage(filename: string): string {
+    const normalized = filename.toLowerCase();
+    if (normalized === 'gemfile' || normalized === 'rakefile') {
+        return 'ruby';
+    }
+
+    const ext = normalized.split('.').pop() || '';
     const langMap: Record<string, string> = {
         ts: 'typescript',
         tsx: 'tsx',
         js: 'javascript',
         jsx: 'jsx',
         py: 'python',
+        cs: 'csharp',
+        csx: 'csharp',
         go: 'go',
         rs: 'rust',
         java: 'java',
+        cc: 'cpp',
+        cpp: 'cpp',
+        cxx: 'cpp',
+        h: 'cpp',
+        hh: 'cpp',
+        hpp: 'cpp',
+        hxx: 'cpp',
+        ipp: 'cpp',
+        tpp: 'cpp',
+        rb: 'ruby',
+        rake: 'ruby',
+        gemspec: 'ruby',
+        ru: 'ruby',
+        erb: 'erb',
         json: 'json',
         md: 'markdown',
         css: 'css',

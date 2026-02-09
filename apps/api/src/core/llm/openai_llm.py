@@ -82,21 +82,38 @@ class OpenAILLM(BaseLLM):
         self,
         messages: List[Dict[str, str]]
     ) -> AsyncGenerator[str, None]:
-        """Generate a streaming response."""
-        try:
-            stream = await self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                stream=True,
-                timeout=120,  # 2 minute timeout for streaming
-            )
+        """Generate a streaming response with retry-before-first-token behavior."""
+        for attempt in range(self._max_retries):
+            yielded = False
+            try:
+                stream = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    stream=True,
+                    timeout=120,  # 2 minute timeout for streaming
+                )
 
-            async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-        except Exception as e:
-            logger.error(f"Streaming generation failed: {e}")
-            yield f"\n\n[Error: {str(e)[:100]}]"
+                async for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yielded = True
+                        yield chunk.choices[0].delta.content
+                return
+            except Exception as e:
+                should_retry = attempt < self._max_retries - 1 and not yielded
+                if should_retry:
+                    wait_time = (2 ** attempt) + 0.5
+                    logger.warning(
+                        "Streaming call failed before first token (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1,
+                        self._max_retries,
+                        wait_time,
+                        e,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                logger.error(f"Streaming generation failed: {e}")
+                yield f"\n\n[Error: {str(e)[:100]}]"
+                return
 
     async def health_check(self) -> bool:
         """Check OpenAI API availability."""

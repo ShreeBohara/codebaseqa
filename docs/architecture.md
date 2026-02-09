@@ -55,3 +55,6 @@ Regex-based chunking fails for code. Tree-sitter gives us semantic understanding
 
 ### Hybrid Search Strategy
 Code retrieval requires exact keyword matching (for variable names) + semantic understanding (for "how does X work"). We combine both to reduce hallucinations.
+
+### Dependency Graph Engine
+Dependency graph generation is deterministic-first: the backend extracts import relationships from indexed repository files, computes node/edge metrics, and prunes large graphs with stable ranking so repeated runs remain consistent. For dense repositories, Graph V2.1 supports adaptive module-first entry, scoped file drill-down, and ranked edge budgets for progressive edge reveal. Optional LLM enrichment is used only for concise node descriptions, never as the primary structure source.

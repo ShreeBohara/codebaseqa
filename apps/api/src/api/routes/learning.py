@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from src.core.demo_mode import assert_demo_repo_access
 from src.core.rate_limit import enforce_demo_soft_limit
 from src.dependencies import get_db, get_gamification_service, get_learning_service
 from src.models.codetour_schemas import CodeTour
-from src.models.learning import LessonContent, Persona, Syllabus
+from src.models.learning import DependencyGraph, LessonContent, Persona, Syllabus
 from src.services.challenges import ChallengeService
 from src.services.gamification import GamificationService, UserStats
 from src.services.learning_service import LearningService
@@ -25,6 +25,8 @@ def _assert_db_repo_access(db: Session, repo_id: str) -> None:
 
 class GenerateCurriculumRequest(BaseModel):
     persona: str
+    force_regenerate: bool = False
+    include_quality_meta: bool = False
 
 @router.get("/personas", response_model=List[Persona])
 async def get_personas(
@@ -42,14 +44,44 @@ async def generate_curriculum(
 ):
     """Generate a personalized learning curriculum for a repository."""
     _assert_learning_repo_access(service, repo_id)
-    enforce_demo_soft_limit(http_request, "curriculum")
+    await enforce_demo_soft_limit(http_request, "curriculum")
     try:
-        return await service.generate_curriculum(repo_id, request.persona)
+        return await service.generate_curriculum(
+            repo_id,
+            request.persona,
+            force_regenerate=request.force_regenerate,
+            include_quality_meta=request.include_quality_meta,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{repo_id}/curriculum", response_model=Syllabus)
+async def get_curriculum(
+    repo_id: str,
+    http_request: Request,
+    persona: str = Query(...),
+    refresh: bool = Query(False),
+    include_quality_meta: bool = Query(False),
+    service: LearningService = Depends(get_learning_service),
+):
+    """Get (or generate) a personalized learning curriculum for a repository."""
+    _assert_learning_repo_access(service, repo_id)
+    await enforce_demo_soft_limit(http_request, "curriculum")
+    try:
+        return await service.generate_curriculum(
+            repo_id,
+            persona,
+            force_regenerate=refresh,
+            include_quality_meta=include_quality_meta,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 class GenerateLessonRequest(BaseModel):
     title: str
+    persona: Optional[str] = None
+    module_id: Optional[str] = None
+    force_regenerate: bool = False
 
 @router.post("/{repo_id}/lessons/{lesson_id}", response_model=LessonContent)
 async def generate_lesson(
@@ -61,9 +93,44 @@ async def generate_lesson(
 ):
     """Generate content for a specific lesson."""
     _assert_learning_repo_access(service, repo_id)
-    enforce_demo_soft_limit(http_request, "lesson")
+    await enforce_demo_soft_limit(http_request, "lesson")
     try:
-        content = await service.generate_lesson(repo_id, lesson_id, request.title)
+        content = await service.generate_lesson(
+            repo_id,
+            lesson_id,
+            request.title,
+            persona_id=request.persona,
+            module_id=request.module_id,
+            force_regenerate=request.force_regenerate,
+        )
+        if not content:
+            raise HTTPException(status_code=500, detail="Failed to generate lesson content")
+        return content
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{repo_id}/lessons/{lesson_id}", response_model=LessonContent)
+async def get_lesson(
+    repo_id: str,
+    lesson_id: str,
+    http_request: Request,
+    persona: str = Query(...),
+    refresh: bool = Query(False),
+    module_id: Optional[str] = Query(None),
+    service: LearningService = Depends(get_learning_service),
+):
+    """Get (or generate) content for a specific lesson."""
+    _assert_learning_repo_access(service, repo_id)
+    await enforce_demo_soft_limit(http_request, "lesson")
+    try:
+        content = await service.get_or_generate_lesson(
+            repo_id=repo_id,
+            lesson_id=lesson_id,
+            persona_id=persona,
+            module_id=module_id,
+            force_regenerate=refresh,
+        )
         if not content:
             raise HTTPException(status_code=500, detail="Failed to generate lesson content")
         return content
@@ -94,29 +161,40 @@ async def generate_quiz(
 async def export_codetour(
     repo_id: str,
     lesson_id: str,
+    persona: Optional[str] = Query(None),
     service: LearningService = Depends(get_learning_service)
 ):
     """Export a lesson as a VS Code CodeTour file (.tour)."""
     _assert_learning_repo_access(service, repo_id)
     try:
-        tour = await service.export_lesson_to_codetour(repo_id, lesson_id)
+        tour = await service.export_lesson_to_codetour(repo_id, lesson_id, persona_id=persona)
         if not tour:
             raise HTTPException(status_code=404, detail="Lesson not found or could not be generated")
         return tour
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{repo_id}/graph")
+@router.get("/{repo_id}/graph", response_model=DependencyGraph)
 async def generate_graph(
     repo_id: str,
     http_request: Request,
+    granularity: str = Query("file", pattern="^(auto|module|file)$"),
+    scope: Optional[str] = Query(None),
+    focus_node: Optional[str] = Query(None),
+    hops: int = Query(1, ge=1, le=2),
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate repository dependency graph."""
     _assert_learning_repo_access(service, repo_id)
-    enforce_demo_soft_limit(http_request, "graph")
+    await enforce_demo_soft_limit(http_request, "graph")
     try:
-        graph = await service.generate_graph(repo_id)
+        graph = await service.generate_graph(
+            repo_id=repo_id,
+            granularity=granularity,
+            scope=scope,
+            focus_node=focus_node,
+            hops=hops,
+        )
         if not graph:
             raise HTTPException(status_code=500, detail="Failed to generate graph")
         return graph
@@ -170,12 +248,13 @@ async def get_achievements(
 @router.get("/{repo_id}/progress")
 async def get_lesson_progress(
     repo_id: str,
+    persona: Optional[str] = Query(None),
     service: GamificationService = Depends(get_gamification_service)
 ):
     """Get list of completed lesson IDs."""
     _assert_db_repo_access(service._db, repo_id)
     try:
-        completed = service.get_completed_lessons(repo_id)
+        completed = service.get_completed_lessons(repo_id, persona=persona)
         return {"completed_lessons": completed}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -183,6 +262,8 @@ async def get_lesson_progress(
 
 class CompleteLessonRequest(BaseModel):
     time_spent_seconds: int = 0
+    persona: Optional[str] = None
+    module_id: Optional[str] = None
 
 
 @router.post("/{repo_id}/lessons/{lesson_id}/complete")
@@ -195,7 +276,13 @@ async def complete_lesson(
     """Mark a lesson as complete and award XP."""
     _assert_db_repo_access(service._db, repo_id)
     try:
-        xp_gain = service.record_lesson_complete(repo_id, lesson_id, request.time_spent_seconds)
+        xp_gain = service.record_lesson_complete(
+            repo_id,
+            lesson_id,
+            request.time_spent_seconds,
+            persona=request.persona,
+            module_id=request.module_id,
+        )
         stats = service.get_user_stats(repo_id)
         return {
             "xp_gained": xp_gain.model_dump(),
@@ -278,6 +365,24 @@ async def record_graph_view(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class RecordGraphNodeViewRequest(BaseModel):
+    node_id: str
+
+
+@router.post("/{repo_id}/graph/nodes/viewed")
+async def record_graph_node_view(
+    repo_id: str,
+    request: RecordGraphNodeViewRequest,
+    service: GamificationService = Depends(get_gamification_service)
+):
+    """Track unique graph node exploration progress."""
+    _assert_db_repo_access(service._db, repo_id)
+    try:
+        return service.record_graph_node_view(repo_id, request.node_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # Challenge Endpoints
 # =============================================================================
@@ -299,7 +404,7 @@ async def generate_challenge(
 ):
     """Generate an interactive challenge for a lesson."""
     _assert_db_repo_access(db, repo_id)
-    enforce_demo_soft_limit(http_request, "challenge")
+    await enforce_demo_soft_limit(http_request, "challenge")
     try:
         # Create challenge service with LLM from learning service
         challenge_service = ChallengeService(db, learning_service._llm)

@@ -83,3 +83,82 @@ async def test_index_repository_failure(indexing_service):
         # Verify status is set to FAILED
         assert mock_repo.status == IndexingStatus.FAILED
         assert "Git clone failed" in str(mock_repo.indexing_error)
+
+
+def test_find_files_includes_new_extensions_and_rails_filenames(indexing_service, tmp_path):
+    """Ensure newly supported source extensions and Rails filenames are indexed."""
+    included_files = [
+        "main.cs",
+        "script.csx",
+        "core.cc",
+        "core.cxx",
+        "core.hpp",
+        "core.hh",
+        "core.hxx",
+        "core.ipp",
+        "core.tpp",
+        "task.rake",
+        "library.gemspec",
+        "template.erb",
+        "Gemfile",
+        "Rakefile",
+        "config.ru",
+    ]
+    excluded_files = ["notes.txt", "archive.zip"]
+
+    for file_name in included_files + excluded_files:
+        (tmp_path / file_name).write_text("content", encoding="utf-8")
+
+    found = indexing_service._find_files(tmp_path)
+    found_names = {path.name for path in found}
+
+    for file_name in included_files:
+        assert file_name in found_names
+    for file_name in excluded_files:
+        assert file_name not in found_names
+
+
+@pytest.mark.asyncio
+async def test_parse_file_falls_back_to_raw_when_parser_fails(indexing_service, tmp_path):
+    """Parser failures should not drop files; they should fallback to raw indexing."""
+    repo = MagicMock()
+    repo.id = "repo-1"
+    source_path = tmp_path / "broken.rb"
+    content = "def hello\n  puts 'hi'\nend\n"
+    source_path.write_text(content, encoding="utf-8")
+
+    parser = MagicMock()
+    parser.parse.side_effect = RuntimeError("parser crashed")
+
+    with patch("src.services.indexing_service.get_parser_for_file", return_value=parser):
+        with patch.object(
+            indexing_service,
+            "_index_raw_file",
+            new_callable=AsyncMock,
+            return_value=[{"id": "raw-1", "content": "raw", "metadata": {"language": "ruby"}}],
+        ) as raw_index:
+            result = await indexing_service._parse_file(repo, source_path, tmp_path)
+
+    raw_index.assert_awaited_once_with(repo, source_path, tmp_path, content)
+    assert result == [{"id": "raw-1", "content": "raw", "metadata": {"language": "ruby"}}]
+
+
+@pytest.mark.asyncio
+async def test_index_raw_file_sets_rails_languages(indexing_service, tmp_path):
+    """Raw indexing should tag Rails files with ruby/erb language metadata."""
+    repo = MagicMock()
+    repo.id = "repo-1"
+
+    gemfile = tmp_path / "Gemfile"
+    gemfile_content = "source 'https://rubygems.org'"
+    gemfile.write_text(gemfile_content, encoding="utf-8")
+
+    erb_file = tmp_path / "index.erb"
+    erb_content = "<h1>Hello</h1>"
+    erb_file.write_text(erb_content, encoding="utf-8")
+
+    gem_chunks = await indexing_service._index_raw_file(repo, gemfile, tmp_path, gemfile_content)
+    erb_chunks = await indexing_service._index_raw_file(repo, erb_file, tmp_path, erb_content)
+
+    assert gem_chunks[0]["metadata"]["language"] == "ruby"
+    assert erb_chunks[0]["metadata"]["language"] == "erb"

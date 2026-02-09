@@ -44,6 +44,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      elkjs:
+        specifier: ^0.11.0
+        version: 0.11.0
       framer-motion:
         specifier: ^12.29.2
         version: 12.33.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1904,6 +1907,9 @@ packages:
 
   electron-to-chromium@1.5.286:
     resolution: {integrity: sha512-9tfDXhJ4RKFNerfjdCcZfufu49vg620741MNs26a9+bhLThdB+plgMeou98CAaHu/WATj2iHOOHTp1hWtABj2A==}
+
+  elkjs@0.11.0:
+    resolution: {integrity: sha512-u4J8h9mwEDaYMqo0RYJpqNMFDoMK7f+pu4GjcV+N8jIC7TRdORgzkfSjTJemhqONFfH6fBI3wpysgWbhgVWIXw==}
 
   emoji-regex@9.2.2:
     resolution: {integrity: sha512-L18DaJsXSUk2+42pv8mLs5jJT2hqFkFE4j21wOmgbUqsZ2hL72NsUU785g9RXgo3s0ZNgVl42TiHp3ZtOv/Vyg==}
@@ -5295,6 +5301,8 @@ snapshots:
       gopd: 1.2.0
 
   electron-to-chromium@1.5.286: {}
+
+  elkjs@0.11.0: {}
 
   emoji-regex@9.2.2: {}
 

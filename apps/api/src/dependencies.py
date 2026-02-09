@@ -3,6 +3,7 @@ Dependency injection for FastAPI.
 Provides database sessions, services, and other dependencies.
 """
 
+import logging
 from functools import lru_cache
 from typing import Generator
 
@@ -11,9 +12,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import settings
+from src.core.cache.chat_cache import ChatCache
 from src.core.llm.openai_llm import OpenAILLM
 from src.core.vectorstore.chroma_store import ChromaStore
 from src.services.learning_service import LearningService
+
+logger = logging.getLogger(__name__)
 
 
 # Database
@@ -98,3 +102,23 @@ def get_gamification_service(
     from src.services.gamification import GamificationService
     return GamificationService(db)
 
+
+@lru_cache()
+def get_redis_client():
+    """Get Redis client when configured, otherwise return None."""
+    if not settings.redis_url:
+        return None
+
+    try:
+        from redis import asyncio as redis_asyncio
+
+        return redis_asyncio.from_url(settings.redis_url)
+    except Exception as exc:
+        logger.warning("Redis unavailable, falling back to in-memory cache: %s", exc)
+        return None
+
+
+@lru_cache()
+def get_chat_cache() -> ChatCache:
+    """Get chat cache service with Redis+memory fallback."""
+    return ChatCache(redis_client=get_redis_client())

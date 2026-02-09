@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import AsyncGenerator, Dict, List
@@ -15,6 +16,7 @@ class OllamaLLM(BaseLLM):
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = 120
+        self._max_retries = 3
 
     async def generate(self, messages: List[Dict[str, str]], use_cache: bool = True, **kwargs) -> str:
         """Generate response using Ollama API."""
@@ -46,25 +48,43 @@ class OllamaLLM(BaseLLM):
             raise
 
     async def generate_stream(self, messages: List[Dict[str, str]]) -> AsyncGenerator[str, None]:
-        """Generate streaming response using Ollama API."""
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                async with client.stream(
-                    "POST",
-                    f"{self._base_url}/api/chat",
-                    json={"model": self._model, "messages": messages, "stream": True}
-                ) as response:
-                    async for line in response.aiter_lines():
-                        if line:
+        """Generate streaming response using Ollama API with retry-before-first-token behavior."""
+        for attempt in range(self._max_retries):
+            yielded = False
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    async with client.stream(
+                        "POST",
+                        f"{self._base_url}/api/chat",
+                        json={"model": self._model, "messages": messages, "stream": True}
+                    ) as response:
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
                             try:
                                 data = json.loads(line)
                                 if "message" in data and "content" in data["message"]:
+                                    yielded = True
                                     yield data["message"]["content"]
                             except json.JSONDecodeError:
                                 continue
-        except Exception as e:
-            logger.error(f"Ollama streaming failed: {e}")
-            yield f"\n\n[Error: {str(e)[:100]}]"
+                return
+            except Exception as e:
+                should_retry = attempt < self._max_retries - 1 and not yielded
+                if should_retry:
+                    wait_time = (2 ** attempt) + 0.5
+                    logger.warning(
+                        "Ollama stream failed before first token (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1,
+                        self._max_retries,
+                        wait_time,
+                        e,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                logger.error(f"Ollama streaming failed: {e}")
+                yield f"\n\n[Error: {str(e)[:100]}]"
+                return
 
     async def health_check(self) -> bool:
         """Check Ollama availability."""

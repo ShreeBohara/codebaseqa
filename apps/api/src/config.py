@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     openai_embedding_max_tokens_per_request: int = 250000
     openai_embedding_max_texts_per_request: int = 128
     openai_embedding_request_concurrency: int = 1
+    openai_embedding_min_seconds_between_requests: float = 0.0
+    openai_embedding_rate_limit_max_retries: int = 6
+    openai_embedding_rate_limit_base_backoff_seconds: float = 1.0
+    openai_embedding_rate_limit_max_backoff_seconds: float = 30.0
     voyage_api_key: Optional[str] = None
     voyage_model: str = "voyage-code-3"
     local_embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
@@ -70,11 +74,45 @@ class Settings(BaseSettings):
     chunk_overlap_tokens: int = 200
 
     # Supported languages
-    supported_languages: List[str] = ["python", "javascript", "typescript", "java"]
+    supported_languages: List[str] = [
+        "python",
+        "javascript",
+        "typescript",
+        "java",
+        "go",
+        "rust",
+        "csharp",
+        "cpp",
+        "ruby",
+        "erb",
+    ]
 
     # Rate limiting
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
+    rate_limit_redis_enabled: bool = True
+
+    # Redis (optional, used for distributed cache/limits)
+    redis_url: Optional[str] = None
+
+    # Chat quality/scalability controls
+    chat_intent_routing_enabled: bool = True
+    chat_content_rerank_enabled: bool = True
+    chat_docs_first_overview_enabled: bool = True
+    chat_redis_cache_enabled: bool = False
+    chat_intent_llm_tiebreak_enabled: bool = True
+    chat_emit_meta_event: bool = True
+    chat_history_max_messages: int = 20
+    chat_history_max_tokens: int = 1800
+    chat_context_max_chars: int = 18000
+    chat_retrieval_candidate_limit: int = 24
+    chat_rerank_candidate_limit: int = 18
+    chat_request_timeout_seconds: int = 90
+    chat_concurrency_wait_seconds: float = 2.0
+    chat_max_concurrent_per_repo: int = 4
+    chat_retrieval_cache_ttl_seconds: int = 600
+    chat_answer_cache_ttl_seconds: int = 1800
+    chat_embed_cache_ttl_seconds: int = 3600
 
     # Graph generation (LLM prompt sizing)
     graph_max_files: int = 50
@@ -85,6 +123,25 @@ class Settings(BaseSettings):
     graph_min_edges: int = 15  # Require more edges before accepting
     graph_edge_max_tokens: int = 600  # More tokens for edge-only generation
     graph_include_orphans: bool = False  # Filter out disconnected nodes
+    graph_v2_enabled: bool = True
+    graph_v2_max_nodes: int = 160
+    graph_v2_max_edges: int = 600
+    graph_v2_enrich_descriptions: bool = False
+    graph_v2_enrich_top_k: int = 24
+    graph_dense_mode_v21: bool = True
+    graph_v21_auto_nodes_threshold: int = 90
+    graph_v21_auto_edges_threshold: int = 240
+    graph_v21_scope_max_nodes: int = 220
+    graph_v21_scope_max_edges: int = 420
+    graph_v21_module_max_nodes: int = 120
+    graph_v21_module_max_edges: int = 260
+    graph_v21_cache_ttl_seconds: int = 45
+    graph_v21_cache_max_entries: int = 64
+    graph_v21_edge_budget_file_per_node: int = 10
+    graph_v21_edge_budget_module_per_node: int = 14
+    graph_v22_min_cross_module_ratio_for_overview: float = 0.08
+    graph_v22_min_cross_module_edges_for_overview: int = 18
+    graph_v22_module_filter_orphans: bool = False
 
     # OpenAI-compatible client defaults (LM Studio)
     openai_timeout_seconds: int = 120
@@ -115,6 +172,11 @@ class Settings(BaseSettings):
     demo_graph_window_seconds: int = 60
     demo_challenge_requests: int = 10
     demo_challenge_window_seconds: int = 60
+
+    # Learning V2 controls
+    learning_v2_enabled: bool = False
+    learning_cache_ttl_days: int = 7
+    learning_prompt_version: str = "learning_v2_1"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

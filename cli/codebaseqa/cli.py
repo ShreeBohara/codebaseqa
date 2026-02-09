@@ -117,7 +117,8 @@ def index(github_url: str, branch: str, wait: bool):
 @cli.command()
 @click.argument("repo_id")
 @click.argument("question")
-def ask(repo_id: str, question: str):
+@click.option("--show-meta/--no-show-meta", default=False, help="Show retrieval diagnostics metadata events")
+def ask(repo_id: str, question: str, show_meta: bool):
     """Ask a question about an indexed repository.
     
     Example:
@@ -151,6 +152,9 @@ def ask(repo_id: str, question: str):
                             
                             if data["type"] == "sources":
                                 sources = data.get("sources", [])
+                            elif data["type"] == "meta":
+                                if show_meta:
+                                    console.print(f"[dim]meta: {json.dumps(data.get('meta', {}), indent=2)}[/]")
                             elif data["type"] == "content":
                                 content = data.get("content", "")
                                 console.print(content, end="")
@@ -262,28 +266,40 @@ def search(repo_id: str, query: str, limit: int):
 
 @cli.command()
 @click.argument("repo_id")
-def lessons(repo_id: str):
+@click.option("--persona", default="new_hire", show_default=True, help="Learning persona")
+@click.option("--refresh", is_flag=True, help="Force regenerate syllabus")
+def lessons(repo_id: str, persona: str, refresh: bool):
     """List available learning lessons."""
     with get_client() as client:
         try:
-            # We need to fetch the syllabus. Since there is no list-syllabus endpoint,
-            # we try to fetch the default persona or list personas first?
-            # Actually, `generate_curriculum` creates/fetches one. But that triggers generation.
-            # We need a way to list EXISTING syllabi or generate one if missing?
-            # For CLI, let's assume we want to see the default track.
-            
             # First, check if repo exists
             repo_res = client.get(f"/api/repos/{repo_id}")
             repo_res.raise_for_status()
-            
-            # Fetch default syllabus (implicitly generates if missing, might take time)
-            console.print("[dim]Fetching curriculum (this may take a moment)...[/]")
-            response = client.post(f"/api/learning/{repo_id}/curriculum", json={"persona": "new_hire"})
+
+            if refresh:
+                console.print("[dim]Regenerating curriculum (this may take a moment)...[/]")
+                response = client.post(
+                    f"/api/learning/{repo_id}/curriculum",
+                    json={"persona": persona, "force_regenerate": True, "include_quality_meta": True},
+                )
+            else:
+                console.print("[dim]Fetching curriculum...[/]")
+                response = client.get(
+                    f"/api/learning/{repo_id}/curriculum",
+                    params={"persona": persona, "include_quality_meta": "true"},
+                )
             response.raise_for_status()
             syllabus = response.json()
-            
-            console.print(f"\n[bold]🎓 Curriculum:[/] {syllabus['title']}\n")
-            
+
+            console.print(f"\n[bold]🎓 Curriculum:[/] {syllabus['title']} [dim]({persona})[/]\n")
+            cache_info = syllabus.get("cache_info") or {}
+            if cache_info:
+                console.print(
+                    f"[dim]Source:[/] {cache_info.get('source', 'unknown')}  "
+                    f"[dim]Generated:[/] {cache_info.get('generated_at', 'n/a')}"
+                )
+                console.print()
+
             for m_idx, module in enumerate(syllabus["modules"], 1):
                 console.print(f"[bold blue]{m_idx}. {module['title']}[/]")
                 for lesson in module["lessons"]:
@@ -297,13 +313,15 @@ def lessons(repo_id: str):
 @cli.command(name="export-tour")
 @click.argument("repo_id")
 @click.argument("lesson_id")
+@click.option("--persona", default=None, help="Optional persona for lesson context")
 @click.option("--output", "-o", default=None, help="Output filename")
-def export_tour(repo_id: str, lesson_id: str, output: str):
+def export_tour(repo_id: str, lesson_id: str, persona: str, output: str):
     """Export a lesson as a VS Code CodeTour file."""
     with get_client() as client:
         try:
             console.print(f"[dim]Exporting lesson {lesson_id}...[/]")
-            response = client.get(f"/api/learning/{repo_id}/lessons/{lesson_id}/export/codetour")
+            params = {"persona": persona} if persona else None
+            response = client.get(f"/api/learning/{repo_id}/lessons/{lesson_id}/export/codetour", params=params)
             response.raise_for_status()
             tour = response.json()
             
