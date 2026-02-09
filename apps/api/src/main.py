@@ -12,7 +12,13 @@ from sqlalchemy import text
 
 from src.api.routes import chat, learning, platform, repos, search
 from src.config import settings
-from src.dependencies import get_chat_cache, get_db_engine, get_redis_client, get_session_factory, get_vector_store
+from src.dependencies import (
+    get_chat_cache,
+    get_db_engine,
+    get_redis_client,
+    get_session_factory,
+    get_vector_store,
+)
 from src.models.database import init_db
 from src.models.migrations import run_pending_migrations
 

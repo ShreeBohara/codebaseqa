@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.core.rag.pipeline import RetrievalDiagnostics, RetrievalResult, RetrievedChunk
 from src.core.cache.chat_cache import ChatCache
+from src.core.rag.pipeline import RetrievalDiagnostics, RetrievalResult, RetrievedChunk
 from src.dependencies import get_chat_cache, get_db, get_llm_service, get_vector_store
 from src.models.database import ChatMessage, ChatSession
 

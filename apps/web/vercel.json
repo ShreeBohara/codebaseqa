@@ -1,0 +1,4 @@
+{
+  "installCommand": "pnpm -C ../.. install --frozen-lockfile",
+  "buildCommand": "pnpm build"
+}
