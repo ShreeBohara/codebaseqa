@@ -63,7 +63,10 @@ async def create_repository(
 
     # Parse GitHub URL
     repo_manager = RepoManager()
-    owner, name = repo_manager.parse_github_url(str(repo.github_url))
+    try:
+        owner, name = repo_manager.parse_github_url(str(repo.github_url))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     # Check if already exists
     existing = db.query(Repository).filter(

@@ -41,7 +41,8 @@ async def test_index_repository_success(indexing_service, mock_repo_data):
         indexing_service._repo_manager = mock_manager
 
         # Mock internal methods using patch.object context managers
-        with patch.object(indexing_service, '_find_files', return_value=[]), \
+        with patch.object(indexing_service, '_reset_repository_index_data', new_callable=AsyncMock) as reset_index, \
+             patch.object(indexing_service, '_find_files', return_value=[]), \
              patch.object(indexing_service, '_embed_and_store', new_callable=AsyncMock), \
              patch.object(indexing_service, '_update_progress'):
 
@@ -56,6 +57,7 @@ async def test_index_repository_success(indexing_service, mock_repo_data):
             print(f"DEBUG: Indexing Error: {mock_repo.indexing_error}")
 
         assert mock_repo.status == IndexingStatus.COMPLETED
+        reset_index.assert_awaited_once_with(repo_id)
         mock_manager.clone_repository.assert_called_once()
 
 
@@ -77,12 +79,14 @@ async def test_index_repository_failure(indexing_service):
         # Inject mock
         indexing_service._repo_manager = mock_manager
 
-        # Run indexing
-        await indexing_service.index_repository(repo_id)
+        with patch.object(indexing_service, '_reset_repository_index_data', new_callable=AsyncMock) as reset_index:
+            # Run indexing
+            await indexing_service.index_repository(repo_id)
 
         # Verify status is set to FAILED
         assert mock_repo.status == IndexingStatus.FAILED
         assert "Git clone failed" in str(mock_repo.indexing_error)
+        reset_index.assert_awaited_once_with(repo_id)
 
 
 def test_find_files_includes_new_extensions_and_rails_filenames(indexing_service, tmp_path):

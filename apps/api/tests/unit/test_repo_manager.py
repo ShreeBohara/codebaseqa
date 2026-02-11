@@ -5,6 +5,25 @@ from src.config import settings
 from src.core.github.repo_manager import RepoManager
 
 
+def test_parse_github_url_extracts_owner_and_repo():
+    manager = RepoManager()
+    owner, repo = manager.parse_github_url("https://github.com/octocat/hello-world.git")
+    assert owner == "octocat"
+    assert repo == "hello-world"
+
+
+def test_parse_github_url_rejects_missing_owner_repo():
+    manager = RepoManager()
+    with pytest.raises(ValueError, match="Invalid repository URL"):
+        manager.parse_github_url("https://github.com")
+
+
+def test_parse_github_url_rejects_path_traversal_segments():
+    manager = RepoManager()
+    with pytest.raises(ValueError, match="Invalid repository"):
+        manager.parse_github_url("https://github.com/../hello-world")
+
+
 @pytest.mark.asyncio
 async def test_get_file_content_reads_valid_repo_file(tmp_path, monkeypatch):
     repos_root = tmp_path / "repos"

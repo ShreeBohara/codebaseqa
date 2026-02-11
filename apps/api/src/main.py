@@ -187,7 +187,7 @@ async def health_check():
 
     return {
         "status": "healthy" if all_ok else "degraded",
-        "version": "0.2.0",
+        "version": app.version,
         "llm_provider": settings.llm_provider,
         "embedding_provider": settings.embedding_provider,
         "checks": checks

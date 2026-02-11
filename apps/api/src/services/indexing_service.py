@@ -69,6 +69,9 @@ class IndexingService:
             return
 
         try:
+            # Always rebuild the index snapshot from scratch to prevent stale/duplicate chunks.
+            await self._reset_repository_index_data(repo_id)
+
             # Update status to cloning
             repo.status = IndexingStatus.CLONING
             self._db.commit()
@@ -133,6 +136,18 @@ class IndexingService:
             repo.indexing_error = str(e)
             self._db.commit()
             self._update_progress(repo_id, "failed", str(e), 0)
+
+    async def _reset_repository_index_data(self, repo_id: str) -> None:
+        """Clear prior SQL/vector artifacts for a repository before full re-index."""
+        self._db.query(CodeChunk).filter(CodeChunk.repository_id == repo_id).delete(synchronize_session=False)
+        self._db.query(CodeFile).filter(CodeFile.repository_id == repo_id).delete(synchronize_session=False)
+        self._db.commit()
+
+        try:
+            vector_store = get_vector_store()
+            await vector_store.delete_collection(repo_id)
+        except Exception as exc:
+            logger.warning("Failed to clear existing vector collection for repo %s: %s", repo_id, exc)
 
     def _find_files(self, repo_path: Path) -> List[Path]:
         """Find all indexable files in repository."""

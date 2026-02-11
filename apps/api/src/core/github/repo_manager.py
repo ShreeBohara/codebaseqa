@@ -5,10 +5,12 @@ Handles cloning, updating, and managing local repository copies.
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
+from urllib.parse import unquote, urlparse
 
 from src.config import settings
 
@@ -22,14 +24,31 @@ class RepoManager:
         self._repos_dir = Path(settings.repos_dir)
         self._repos_dir.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _sanitize_repo_segment(value: str, label: str) -> str:
+        segment = (value or "").strip()
+        if not segment or segment in {".", ".."}:
+            raise ValueError(f"Invalid repository {label}")
+        if "/" in segment or "\\" in segment:
+            raise ValueError(f"Invalid repository {label}")
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", segment):
+            raise ValueError(f"Invalid repository {label}")
+        return segment
+
     def parse_github_url(self, url: str) -> Tuple[str, str]:
         """Parse GitHub URL to extract owner and repo name."""
-        url = url.rstrip('/')
-        if url.endswith('.git'):
-            url = url[:-4]
+        parsed = urlparse(url.rstrip("/"))
+        parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
+        if len(parts) < 2:
+            raise ValueError("Invalid repository URL. Expected format: https://github.com/<owner>/<repo>")
 
-        parts = url.split('/')
-        return parts[-2], parts[-1]
+        owner = self._sanitize_repo_segment(parts[0], "owner")
+        repo = parts[1]
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        name = self._sanitize_repo_segment(repo, "name")
+
+        return owner, name
 
     def get_local_path(self, owner: str, name: str) -> Path:
         """Get local path for a repository."""

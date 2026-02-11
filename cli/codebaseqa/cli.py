@@ -7,17 +7,18 @@ Commands:
     list                   - List all indexed repositories
 """
 
+import os
+import time
+
 import click
 import httpx
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.markdown import Markdown
-from rich.panel import Panel
-import time
 
 console = Console()
-API_URL = "http://localhost:8000"
+API_URL = os.getenv("CODEBASEQA_API_URL", "http://localhost:8000").rstrip("/")
 
 
 def get_client() -> httpx.Client:

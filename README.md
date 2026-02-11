@@ -183,12 +183,14 @@ CodebaseQA reads settings from environment variables (via `apps/api/src/config.p
 | `OLLAMA_BASE_URL` | Ollama host URL | `http://localhost:11434` |
 | `OLLAMA_MODEL` | Ollama generation model | `llama3.1` |
 | `LOCAL_EMBEDDING_MODEL` | Ollama embedding model name | `nomic-ai/nomic-embed-text-v1.5` |
+| `LEARNING_V2_ENABLED` | Enable Learning V2 syllabus/lesson cache pipeline | `false` |
 
 Notes:
 
 - Docker compose currently passes `OPENAI_API_KEY` by default; if you want Anthropic/Ollama in Docker, add those env vars in `docker/docker-compose.yml`.
 - For local development, all variables above can be set directly in your shell or `.env`.
 - Large repositories can trigger temporary embedding rate limits (`HTTP 429`). Indexing retries automatically; tune the `OPENAI_EMBEDDING_*` controls above (batch size, pacing, and retry backoff) if needed.
+- `VOYAGE_API_KEY` exists in config for future provider support, but `EMBEDDING_PROVIDER` currently supports only `openai` and `ollama`.
 
 ---
 
@@ -233,6 +235,7 @@ Notes:
 | `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}/quiz/result` | Submit quiz result + award XP |
 | `POST` | `/api/learning/{repo_id}/challenges/complete` | Record challenge completion + award XP |
 | `POST` | `/api/learning/{repo_id}/graph/viewed` | Record graph view event |
+| `POST` | `/api/learning/{repo_id}/graph/nodes/viewed` | Record unique graph node exploration events |
 | `POST` | `/api/learning/{repo_id}/lessons/{lesson_id}/challenge` | Generate challenge |
 | `POST` | `/api/learning/{repo_id}/challenges/validate/bug_hunt` | Validate bug hunt answer |
 | `POST` | `/api/learning/{repo_id}/challenges/validate/code_trace` | Validate code trace answer |
@@ -258,6 +261,8 @@ Install:
 cd cli
 pip install -e .
 ```
+
+Optional: set `CODEBASEQA_API_URL` if your API is not at `http://localhost:8000`.
 
 Commands:
 
@@ -311,7 +316,8 @@ Backend:
 
 ```bash
 cd apps/api
-pytest tests/unit tests/integration
+# after activating your virtualenv
+python -m pytest tests/unit tests/integration
 ruff check src tests
 ```
 
