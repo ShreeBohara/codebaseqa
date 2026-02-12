@@ -63,35 +63,49 @@ Replace the video URL with your final demo link before publishing.
 
 Media pack guide: [`docs/media/README.md`](./docs/media/README.md)
 
-Replace the placeholder images below with your real screenshots while keeping the same filenames.
+The gallery below uses the 10 numbered screenshots in `docs/media/screenshots`.
 
 ### Web App Flow
 
-#### 1) Repository import and indexing
+#### 1) Landing page hero
 
-![Repository import and indexing](./docs/media/screenshots/01-repo-import.svg)
+![Landing page hero](./docs/media/screenshots/01_MainPage.png)
 
-#### 2) Chat answers with source citations
+#### 2) Landing page feature section
 
-![Chat answers with source citations](./docs/media/screenshots/02-chat-citations.svg)
+![Landing page feature section](./docs/media/screenshots/01_b_MainPage.png)
 
-#### 3) Learning lesson view
+#### 3) Repository import and indexing
 
-![Learning lesson view](./docs/media/screenshots/03-learning-lesson.svg)
+![Repository import and indexing](./docs/media/screenshots/02_RepoPage.png)
 
-#### 4) Quiz and challenge practice
+#### 4) Chat home with starter prompts
 
-![Quiz and challenge practice](./docs/media/screenshots/04-quiz-challenge.svg)
+![Chat home with starter prompts](./docs/media/screenshots/03_ChatPage.png)
 
-#### 5) Dependency graph exploration
+#### 5) Chat answer with citations and code snippets
 
-![Dependency graph exploration](./docs/media/screenshots/05-dependency-graph.svg)
+![Chat answer with citations and code snippets](./docs/media/screenshots/04_AuthChat.png)
 
-### CLI Flow
+#### 6) Dependency graph overview
 
-#### 6) CLI workflow
+![Dependency graph overview](./docs/media/screenshots/05_Graph.png)
 
-![CLI workflow](./docs/media/screenshots/06-cli-workflow.svg)
+#### 7) Dependency graph deep inspection panel
+
+![Dependency graph deep inspection panel](./docs/media/screenshots/06_grpahDepth.png)
+
+#### 8) Learning role selection
+
+![Learning role selection](./docs/media/screenshots/07_LearnPage.png)
+
+#### 9) Full-stack learning track map
+
+![Full-stack learning track map](./docs/media/screenshots/08_FullStackTrackl.png)
+
+#### 10) Lesson workspace with practice tools
+
+![Lesson workspace with practice tools](./docs/media/screenshots/09_InsideLearn.png)
 
 ---
 
