@@ -15,7 +15,7 @@ AI-powered codebase understanding, onboarding, and hands-on learning for develop
 ![GitHub stars](https://img.shields.io/github/stars/ShreeBohara/codebaseqa?style=social)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-[Quick Start](#quick-start) • [Features](#features) • [Live Demo Mode](#live-demo-mode) • [API](#api-endpoints) • [CLI](#cli-usage)
+[Quick Start](#quick-start) • [Demo Video](#demo-video) • [Screenshots](#screenshots) • [Features](#features) • [Live Demo Mode](#live-demo-mode) • [API](#api-endpoints) • [CLI](#cli-usage)
 
 [Star Repo](https://github.com/ShreeBohara/codebaseqa) • [Open Issues](https://github.com/ShreeBohara/codebaseqa/issues) • [Contributing](./CONTRIBUTING.md)
 
@@ -52,6 +52,46 @@ Use it from the web UI or from the CLI, depending on your workflow.
 - **Engineering managers/leads** accelerating ramp-up
 - **Developers** trying to understand architecture and key execution paths
 - **Interview prep / self-learning** on open-source repositories
+
+## Demo Video
+
+[![Watch the 90-second demo](./docs/media/video/demo-thumbnail.svg)](https://www.youtube.com/watch?v=REPLACE_WITH_YOUR_VIDEO_ID)
+
+Replace the video URL with your final demo link before publishing.
+
+## Screenshots
+
+Media pack guide: [`docs/media/README.md`](./docs/media/README.md)
+
+Replace the placeholder images below with your real screenshots while keeping the same filenames.
+
+### Web App Flow
+
+#### 1) Repository import and indexing
+
+![Repository import and indexing](./docs/media/screenshots/01-repo-import.svg)
+
+#### 2) Chat answers with source citations
+
+![Chat answers with source citations](./docs/media/screenshots/02-chat-citations.svg)
+
+#### 3) Learning lesson view
+
+![Learning lesson view](./docs/media/screenshots/03-learning-lesson.svg)
+
+#### 4) Quiz and challenge practice
+
+![Quiz and challenge practice](./docs/media/screenshots/04-quiz-challenge.svg)
+
+#### 5) Dependency graph exploration
+
+![Dependency graph exploration](./docs/media/screenshots/05-dependency-graph.svg)
+
+### CLI Flow
+
+#### 6) CLI workflow
+
+![CLI workflow](./docs/media/screenshots/06-cli-workflow.svg)
 
 ---
 

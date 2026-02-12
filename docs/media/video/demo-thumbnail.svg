@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="CodebaseQA demo thumbnail placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)" />
+  <rect x="120" y="140" width="1040" height="440" rx="20" fill="#0b1220" stroke="#334155" stroke-width="2" />
+  <circle cx="640" cy="360" r="86" fill="#14b8a6" opacity="0.9" />
+  <polygon points="612,314 612,406 690,360" fill="#042f2e" />
+  <text x="640" y="520" font-family="Arial, sans-serif" font-size="44" fill="#e2e8f0" text-anchor="middle">CodebaseQA Demo Video</text>
+  <text x="640" y="562" font-family="Arial, sans-serif" font-size="26" fill="#94a3b8" text-anchor="middle">Replace this thumbnail before launch</text>
+</svg>

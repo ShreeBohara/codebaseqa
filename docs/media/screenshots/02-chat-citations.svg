@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Chat with citations placeholder">
+  <rect width="1280" height="720" fill="#0f172a" />
+  <rect x="80" y="80" width="1120" height="560" rx="18" fill="#111827" stroke="#334155" />
+  <text x="120" y="160" font-family="Arial, sans-serif" font-size="46" fill="#e2e8f0">02. Chat Answers with Source Citations</text>
+  <text x="120" y="230" font-family="Arial, sans-serif" font-size="28" fill="#94a3b8">Replace with real screenshot: response + cited files/snippets.</text>
+</svg>
