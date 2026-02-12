@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/ShreeBohara/codebaseqa/security/advisories/new
+    about: Please report security issues privately.
+  - name: Contribution guidelines
+    url: https://github.com/ShreeBohara/codebaseqa/blob/main/CONTRIBUTING.md
+    about: Read contribution and local setup guidance before opening a pull request.

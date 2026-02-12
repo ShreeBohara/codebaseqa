@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible problem in CodebaseQA
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please provide enough detail so we can reproduce quickly.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What broke?
+      placeholder: A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to reproduce the issue.
+      placeholder: |
+        1. Go to ...
+        2. Run command ...
+        3. Click ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      placeholder: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      placeholder: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Screenshots
+      description: Paste stack traces or add screenshots if available.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Project Version / Commit
+      description: Commit SHA, branch, or release version.
+      placeholder: main @ abc1234
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node/Python versions, DB/provider details, docker/local mode.
+      placeholder: |
+        OS:
+        Node:
+        Python:
+        Provider:
+        Run mode:
+    validations:
+      required: true

@@ -2,23 +2,32 @@
 
 <div align="center">
 
-**AI-Powered Codebase Understanding & Learning Platform**
+**Understand any codebase in minutes, not days.**
+
+AI-powered codebase understanding, onboarding, and hands-on learning for developers.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=nextdotjs&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)
+![CI](https://github.com/ShreeBohara/codebaseqa/actions/workflows/ci.yml/badge.svg)
+![GitHub stars](https://img.shields.io/github/stars/ShreeBohara/codebaseqa?style=social)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-[Features](#features) • [Quick Start](#quick-start) • [Configuration](#configuration) • [API](#api-endpoints) • [CLI](#cli-usage)
+[Quick Start](#quick-start) • [Features](#features) • [Live Demo Mode](#live-demo-mode) • [API](#api-endpoints) • [CLI](#cli-usage)
+
+[Star Repo](https://github.com/ShreeBohara/codebaseqa) • [Open Issues](https://github.com/ShreeBohara/codebaseqa/issues) • [Contributing](./CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## What is CodebaseQA?
+## Why CodebaseQA?
 
-CodebaseQA helps developers understand unfamiliar repositories quickly with:
+CodebaseQA is built for the moment you open an unfamiliar repository and need answers fast.
+
+It gives you:
 
 - **Chat Q&A over real code context** (RAG + source citations)
 - **Learning paths** tailored by persona
@@ -27,7 +36,22 @@ CodebaseQA helps developers understand unfamiliar repositories quickly with:
 - **Gamification** (XP, levels, streaks, achievements, activity heatmap)
 - **Full-workspace dependency graph visualization** with adaptive module-first overview, scoped drill-down, and PNG export
 
-It supports both a web UI and a CLI workflow.
+Use it from the web UI or from the CLI, depending on your workflow.
+
+## 90-Second Product Flow
+
+1. Add a GitHub repository and let CodebaseQA index it.
+2. Ask natural-language questions and get answers with source-backed citations.
+3. Generate a persona-based curriculum and open any lesson.
+4. Practice with quizzes/challenges and track progress with XP, streaks, and achievements.
+5. Explore system structure in the dependency graph and export lesson tours for VS Code.
+
+## Best For
+
+- **New team members** onboarding into large codebases
+- **Engineering managers/leads** accelerating ramp-up
+- **Developers** trying to understand architecture and key execution paths
+- **Interview prep / self-learning** on open-source repositories
 
 ---
 
