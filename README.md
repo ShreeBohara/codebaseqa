@@ -23,6 +23,14 @@ AI-powered codebase understanding, onboarding, and hands-on learning for develop
 
 ---
 
+## Launch Article Kit
+
+Planning a launch post on Medium? Use the ready-to-publish pack:
+
+- [`docs/launch/medium/README.md`](./docs/launch/medium/README.md)
+
+---
+
 ## Why CodebaseQA?
 
 CodebaseQA is built for the moment you open an unfamiliar repository and need answers fast.

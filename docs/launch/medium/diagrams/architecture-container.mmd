@@ -1,0 +1,17 @@
+flowchart LR
+    U["Developer (Browser)"]
+    FE["Next.js Web App<br/>(Vercel)"]
+    API["FastAPI Backend<br/>(Render)"]
+    SQL["SQLite<br/>(Metadata)"]
+    VDB["ChromaDB<br/>(Embeddings)"]
+    LLM["LLM Provider<br/>(OpenAI / Anthropic / Ollama)"]
+    REPO["Imported Repository"]
+
+    U --> FE
+    FE --> API
+    API --> SQL
+    API --> VDB
+    API --> LLM
+    API --> REPO
+    REPO --> API
+

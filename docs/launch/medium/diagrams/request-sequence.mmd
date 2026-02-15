@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant Dev as Developer
+    participant FE as Next.js (Vercel)
+    participant API as FastAPI (Render)
+    participant IDX as Index/Parser
+    participant VDB as Chroma
+    participant LLM as LLM Provider
+
+    Dev->>FE: Ask question about repository
+    FE->>API: POST /chat
+    API->>IDX: Build query variants
+    API->>VDB: Hybrid retrieve candidates
+    API->>LLM: Re-rank + answer with context
+    LLM-->>API: Grounded response
+    API-->>FE: Answer + citations
+    FE-->>Dev: Render response and sources
+
