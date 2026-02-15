@@ -55,9 +55,20 @@ Use it from the web UI or from the CLI, depending on your workflow.
 
 ## Demo Video
 
-[![Watch the 90-second demo](./docs/media/screenshots/01_MainPage.png)](https://youtu.be/nM8-2t4xr9A)
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=nM8-2t4xr9A">
+    <img src="./docs/media/screenshots/01_MainPage.png" alt="CodebaseQA demo video thumbnail (click to watch on YouTube)" />
+  </a>
+</p>
 
-Replace the video URL with your final demo link before publishing.
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=nM8-2t4xr9A">
+    <img src="https://img.shields.io/badge/Watch%2090s%20Demo%20on%20YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch 90s demo on YouTube" />
+  </a>
+</p>
+
+Click the thumbnail or button above to play the full demo video.
+
 
 ## Screenshots
 
