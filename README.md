@@ -15,7 +15,7 @@ AI-powered codebase understanding, onboarding, and hands-on learning for develop
 ![GitHub stars](https://img.shields.io/github/stars/ShreeBohara/codebaseqa?style=social)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-[Quick Start](#quick-start) • [Demo Video](#demo-video) • [Screenshots](#screenshots) • [Features](#features) • [Live Demo Mode](#live-demo-mode) • [API](#api-endpoints) • [CLI](#cli-usage)
+[Quick Start](#quick-start) • [Demo Video](#demo-video) • [Architecture Diagram](#architecture-diagram) • [Screenshots](#screenshots) • [Features](#features) • [Live Demo Mode](#live-demo-mode) • [API](#api-endpoints) • [CLI](#cli-usage)
 
 [Star Repo](https://github.com/ShreeBohara/codebaseqa) • [Open Issues](https://github.com/ShreeBohara/codebaseqa/issues) • [Contributing](./CONTRIBUTING.md)
 
@@ -69,6 +69,9 @@ Use it from the web UI or from the CLI, depending on your workflow.
 
 Click the thumbnail or button above to play the full demo video.
 
+## Architecture Diagram
+
+![CodebaseQA architecture diagram](./docs/arch_final.png)
 
 ## Screenshots
 
