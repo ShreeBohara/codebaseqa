@@ -29,6 +29,7 @@ _BLANK_MEANS_DEFAULT = (
     "chroma_persist_dir",
     "repos_dir",
     "vector_db_type",
+    "azure_openai_tokenizer_model",
 )
 
 
@@ -64,7 +65,7 @@ class Settings(BaseSettings):
     qdrant_api_key: Optional[str] = None
 
     # LLM Providers
-    llm_provider: str = "openai"  # "openai", "anthropic", "ollama"
+    llm_provider: str = "openai"  # "openai", "azure_openai", "anthropic", "ollama"
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o"
     anthropic_api_key: Optional[str] = None
@@ -72,10 +73,32 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1"
 
+    # Azure OpenAI
+    #
+    # Targets Azure's v1 OpenAI-compatible surface, so the standard OpenAI client is
+    # used rather than AzureOpenAI (whose static types the openai SDK README warns
+    # "can be incorrect"). azure_openai_base_url() below appends /openai/v1.
+    #
+    # Note that on Azure the *deployment name* takes the place of the model name in
+    # API calls. It is frequently not a model id, which is why the tokenizer must be
+    # named separately -- see azure_openai_tokenizer_model.
+    azure_openai_endpoint: Optional[str] = None  # e.g. https://my-resource.openai.azure.com
+    azure_openai_api_key: Optional[str] = None
+    azure_openai_deployment: Optional[str] = None  # chat deployment name
+    azure_openai_embedding_deployment: Optional[str] = None  # embedding deployment name
+    # tiktoken cannot resolve an encoding from a deployment name; without this it
+    # silently falls back to cl100k_base, which is wrong for o200k_base models and
+    # makes every token count (and therefore every truncation) quietly inaccurate.
+    azure_openai_tokenizer_model: str = "text-embedding-3-small"
+
     # Embedding Providers
-    embedding_provider: str = "openai"  # "openai" or "ollama"
+    embedding_provider: str = "openai"  # "openai", "azure_openai" or "ollama"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_base_url: Optional[str] = None  # Optional: OpenAI-compatible endpoint (e.g., LM Studio)
+    # Must match the deployed model's output size. text-embedding-3-small is 1536,
+    # text-embedding-3-large is 3072; a mismatch is only discovered when Chroma
+    # rejects the insert, so it is configurable rather than hardcoded.
+    openai_embedding_dimensions: int = 1536
     openai_embedding_max_tokens_per_request: int = 250000
     openai_embedding_max_texts_per_request: int = 128
     openai_embedding_request_concurrency: int = 1
@@ -222,6 +245,26 @@ class Settings(BaseSettings):
             if field is not None and field.default is not None:
                 return field.default
         return value
+
+    def azure_openai_base_url(self) -> str:
+        """
+        Base URL for Azure's v1 OpenAI-compatible surface.
+
+        Azure exposes an OpenAI-compatible API at <endpoint>/openai/v1, which lets the
+        standard OpenAI client talk to it directly. Accepts an endpoint with or without
+        a trailing slash, and is idempotent if the caller already included /openai/v1.
+        """
+        endpoint = (self.azure_openai_endpoint or "").strip().rstrip("/")
+        if not endpoint:
+            raise ValueError(
+                "AZURE_OPENAI_ENDPOINT is required when using the azure_openai provider "
+                "(e.g. https://my-resource.openai.azure.com)"
+            )
+        if endpoint.endswith("/openai/v1"):
+            return endpoint
+        if endpoint.endswith("/openai"):
+            return f"{endpoint}/v1"
+        return f"{endpoint}/openai/v1"
 
     @property
     def cors_origins(self) -> List[str]:

@@ -15,6 +15,22 @@ def create_llm() -> BaseLLM:
             model=settings.openai_model,
             base_url=settings.openai_base_url,
         )
+    elif provider in ("azure_openai", "azure"):
+        # Azure's v1 surface is OpenAI-compatible, so the same client is reused with a
+        # different base_url. The deployment name takes the place of the model name.
+        if not settings.azure_openai_api_key:
+            raise ValueError("AZURE_OPENAI_API_KEY required for the azure_openai provider")
+        if not settings.azure_openai_deployment:
+            raise ValueError(
+                "AZURE_OPENAI_DEPLOYMENT required for the azure_openai provider "
+                "(the chat deployment name, which Azure uses in place of a model id)"
+            )
+        return OpenAILLM(
+            api_key=settings.azure_openai_api_key,
+            model=settings.azure_openai_deployment,
+            base_url=settings.azure_openai_base_url(),
+            provider_label="azure_openai",
+        )
     elif provider == "anthropic":
         if not settings.anthropic_api_key:
             # Don't raise immediately, allow app to start but fail on use if key missing

@@ -8,7 +8,7 @@ import logging
 import random
 import threading
 import time
-from typing import List, Sequence
+from typing import Callable, List, Sequence
 
 import tiktoken
 from openai import AsyncOpenAI, RateLimitError
@@ -23,9 +23,11 @@ class OpenAIEmbeddings(BaseEmbeddings):
 
     def __init__(
         self,
-        api_key: str = None,
+        api_key: str | Callable[[], str] | None = None,
         model: str = "text-embedding-3-small",
         base_url: str | None = None,
+        dimensions: int = 1536,
+        tokenizer_model: str | None = None,
         max_tokens_per_request: int = 250000,
         max_texts_per_request: int = 128,
         request_concurrency: int = 1,
@@ -39,7 +41,7 @@ class OpenAIEmbeddings(BaseEmbeddings):
             client_kwargs["base_url"] = base_url
         self._client = AsyncOpenAI(**client_kwargs)
         self._model = model
-        self._dimensions = 1536
+        self._dimensions = int(dimensions)
         self._max_tokens = 8000  # Leave some buffer from 8192 limit
         self._max_tokens_per_request = max(1, max_tokens_per_request)
         self._max_texts_per_request = max(1, max_texts_per_request)
@@ -54,10 +56,23 @@ class OpenAIEmbeddings(BaseEmbeddings):
         )
         self._request_pacing_lock = threading.Lock()
         self._next_request_time = 0.0
+        # tiktoken resolves an encoding from a *model id*. On Azure `model` is a
+        # deployment name, which will not resolve -- and the bare fallback below is
+        # silent, so every token count (and therefore every truncation in
+        # _truncate_text and every batch split in _split_batches) would be computed
+        # with the wrong encoding without any signal. tokenizer_model lets the caller
+        # name the real model; the fallback now warns instead of hiding it.
+        resolve_from = tokenizer_model or model
         try:
-            self._tokenizer = tiktoken.encoding_for_model(model)
+            self._tokenizer = tiktoken.encoding_for_model(resolve_from)
         except KeyError:
             self._tokenizer = tiktoken.get_encoding("cl100k_base")
+            logger.warning(
+                "tiktoken has no encoding for %r; falling back to cl100k_base. Token "
+                "counts will be approximate. Set AZURE_OPENAI_TOKENIZER_MODEL (or pass "
+                "tokenizer_model) to the underlying model id to fix this.",
+                resolve_from,
+            )
 
     @property
     def dimensions(self) -> int:
