@@ -1,0 +1,22 @@
+# Terraform state contains every resolved value in PLAINTEXT, including
+# openai_api_key, azure_openai_api_key, github_token and the Vercel env var -- marking
+# a variable `sensitive` only redacts it from CLI output, never from state.
+# Committing state would publish the keys.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl.bak
+
+# Variable files hold the same secrets.
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Plan files also embed resolved values.
+*.tfplan
+crash.log
+crash.*.log
+
+# .terraform.lock.hcl is intentionally NOT ignored -- it pins provider checksums and
+# belongs in version control.

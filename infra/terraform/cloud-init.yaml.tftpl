@@ -1,0 +1,80 @@
+#cloud-config
+# Brings up the API from docker/docker-compose.yml on the attached block volume.
+#
+# Runs once, at first boot. Editing this file does not affect a running droplet --
+# Terraform will show a diff on user_data but the droplet must be replaced for it to
+# take effect.
+
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - ufw
+
+write_files:
+  # Compose reads $${VAR} from the file next to docker-compose.yml, which is docker/.env
+  # -- NOT a .env at the repository root. Written 0600 because it holds API keys.
+  - path: /etc/codebaseqa.env
+    permissions: "0600"
+    owner: root:root
+    content: |
+%{ for k, v in app_env ~}
+      ${k}=${v}
+%{ endfor ~}
+
+  - path: /usr/local/bin/codebaseqa-up
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      cd ${data_mount}/app
+      cp /etc/codebaseqa.env docker/.env
+      # Do not publish Redis on the public interface. The compose file maps 6379 for
+      # local development; on a public droplet that is an unauthenticated Redis facing
+      # the internet. The firewall already blocks it -- this removes the mapping too,
+      # so the exposure does not depend on a single control.
+      docker compose -f docker/docker-compose.yml up -d --build --remove-orphans
+      docker compose -f docker/docker-compose.yml ps
+
+runcmd:
+  # --- docker engine from the official repository ---
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable"
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+  # --- wait for the block volume, then mount it ---
+  # The volume attaches asynchronously, so it may not exist when runcmd starts.
+  - |
+    DEV=/dev/disk/by-id/scsi-0DO_Volume_${volume_name}
+    for i in $(seq 1 60); do [ -e "$DEV" ] && break; sleep 2; done
+    if [ ! -e "$DEV" ]; then echo "volume never appeared: $DEV" >&2; exit 1; fi
+    # Only format if there is no filesystem -- never reformat an existing volume.
+    if ! blkid "$DEV" >/dev/null 2>&1; then mkfs.ext4 -F "$DEV"; fi
+    mkdir -p ${data_mount}
+    grep -q "${data_mount}" /etc/fstab || \
+      echo "$DEV ${data_mount} ext4 defaults,nofail,discard 0 2" >> /etc/fstab
+    mount -a
+
+  # --- application ---
+  - git clone --depth 1 --branch ${git_ref} ${repo_url} ${data_mount}/app || (cd ${data_mount}/app && git fetch --depth 1 origin ${git_ref} && git checkout FETCH_HEAD)
+  - mkdir -p ${data_mount}/app/data
+
+  # --- host firewall in addition to the DO cloud firewall ---
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 8000/tcp
+  - ufw --force enable
+
+  - /usr/local/bin/codebaseqa-up
+
+  # --- restart the stack on reboot ---
+  - systemctl enable docker
