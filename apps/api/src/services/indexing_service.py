@@ -3,6 +3,7 @@ Repository indexing service.
 Handles cloning, parsing, and embedding of code repositories.
 """
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -17,7 +18,13 @@ from src.config import settings
 from src.core.github.repo_manager import RepoManager
 from src.core.parser.tree_sitter_parser import get_parser_for_file
 from src.dependencies import get_embedding_service, get_vector_store
-from src.models.database import CodeChunk, CodeFile, IndexingStatus, Repository
+from src.models.database import (
+    CodeChunk,
+    CodeDependency,
+    CodeFile,
+    IndexingStatus,
+    Repository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +129,26 @@ class IndexingService:
             if chunks_data:
                 await self._embed_and_store(repo_id, chunks_data)
 
+            # Derive the dependency graph while the clone is still on disk.
+            #
+            # This used to happen inside every graph request instead, which meant
+            # reading every source file off disk on the event loop behind a 45-second
+            # cache, and it silently produced a worse graph once the clone was gone
+            # (after a redeploy or container restart) because it fell back to the
+            # unresolved import strings on CodeFile. Doing it here is the only point
+            # where the working tree is guaranteed to exist.
+            #
+            # Deliberately non-fatal: a graph derivation failure must not fail an
+            # otherwise good index, and the read path can still fall back.
+            try:
+                await self._persist_dependency_graph(repo)
+            except Exception as exc:
+                logger.warning(
+                    "Dependency graph derivation failed for %s; the graph endpoint will "
+                    "fall back to deriving on request: %s",
+                    repo_id, exc,
+                )
+
             # Complete
             repo.status = IndexingStatus.COMPLETED
             repo.last_indexed_at = datetime.now(timezone.utc)
@@ -141,6 +168,12 @@ class IndexingService:
         """Clear prior SQL/vector artifacts for a repository before full re-index."""
         self._db.query(CodeChunk).filter(CodeChunk.repository_id == repo_id).delete(synchronize_session=False)
         self._db.query(CodeFile).filter(CodeFile.repository_id == repo_id).delete(synchronize_session=False)
+        # Stale edges would otherwise union with the newly derived ones, since the
+        # uniqueness constraint is on (repo, source, target, relation) and a renamed or
+        # deleted file produces edges that no longer have a counterpart.
+        self._db.query(CodeDependency).filter(
+            CodeDependency.repository_id == repo_id
+        ).delete(synchronize_session=False)
         self._db.commit()
 
         try:
@@ -148,6 +181,54 @@ class IndexingService:
             await vector_store.delete_collection(repo_id)
         except Exception as exc:
             logger.warning("Failed to clear existing vector collection for repo %s: %s", repo_id, exc)
+
+    async def _persist_dependency_graph(self, repo: Repository) -> int:
+        """
+        Derive import edges once and store them in code_dependencies.
+
+        Reuses LearningService's resolution logic rather than reimplementing it, so
+        there is exactly one definition of what an edge is and how it is classified.
+        The file reading is offloaded to a worker thread because it is blocking and
+        proportional to repository size -- this runs inside the indexing task, which
+        shares an event loop with nothing, but keeping it off the loop means the same
+        method is safe to call from a request handler later if that is ever wanted.
+        """
+        from src.services.learning_service import LearningService
+
+        files = self._db.query(CodeFile).filter(CodeFile.repository_id == repo.id).all()
+        if not files:
+            return 0
+
+        service = LearningService(self._db, llm=None, vector_store=None)
+        file_map = {f.path: f for f in files}
+        all_paths = set(file_map)
+        source_paths = sorted(all_paths)
+
+        edges = await asyncio.to_thread(
+            service._build_deterministic_edges, repo, source_paths, all_paths, file_map
+        )
+
+        rows = [
+            CodeDependency(
+                repository_id=repo.id,
+                source_path=edge.source,
+                target_path=edge.target,
+                relation=getattr(edge, "relation", None) or "imports",
+                weight=int(getattr(edge, "weight", 1) or 1),
+                confidence=float(getattr(edge, "confidence", 0.72) or 0.72),
+            )
+            for edge in edges
+        ]
+
+        if rows:
+            self._db.bulk_save_objects(rows)
+        self._db.commit()
+
+        logger.info(
+            "Derived %d dependency edges for %s/%s at index time",
+            len(rows), repo.github_owner, repo.github_name,
+        )
+        return len(rows)
 
     def _find_files(self, repo_path: Path) -> List[Path]:
         """Find all indexable files in repository."""

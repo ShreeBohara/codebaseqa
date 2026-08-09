@@ -110,6 +110,18 @@ def run_pending_migrations(engine: Engine) -> List[str]:
             connection.execute(text("ALTER TABLE learning_syllabi ADD COLUMN expires_at DATETIME"))
             applied.append("learning_syllabi.expires_at")
 
+        # code_dependencies itself is created by init_db/create_all, which runs first
+        # (main.py). These indexes are declared on the model too, so this block only
+        # matters for a database that predates the table and gets it via create_all
+        # without the accompanying indexes -- it is idempotent either way.
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_code_dependencies_repo "
+                "ON code_dependencies (repository_id)"
+            )
+        )
+        applied.append("ix_code_dependencies_repo")
+
     if applied:
         logger.info("Applied runtime migrations: %s", ", ".join(applied))
 

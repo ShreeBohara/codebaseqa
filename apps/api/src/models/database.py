@@ -5,7 +5,7 @@ Designed for future extensibility (multi-user, teams, etc.)
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import declarative_base, relationship
@@ -72,6 +73,11 @@ class Repository(Base):
     files = relationship("CodeFile", back_populates="repository", cascade="all, delete-orphan")
     chunks = relationship("CodeChunk", back_populates="repository", cascade="all, delete-orphan")
     chat_sessions = relationship("ChatSession", back_populates="repository", cascade="all, delete-orphan")
+    # Cascade matters: without it, DELETE /api/repos/{id} would leave orphaned edges
+    # behind, and a later re-import of the same repo would union old and new graphs.
+    dependencies = relationship(
+        "CodeDependency", back_populates="repository", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_repositories_github", "github_owner", "github_name"),
@@ -113,6 +119,53 @@ class CodeFile(Base):
     __table_args__ = (
         Index("ix_code_files_repo_path", "repository_id", "path"),
         Index("ix_code_files_language", "language"),
+    )
+
+
+class CodeDependency(Base):
+    """
+    A resolved import edge between two files, derived once at index time.
+
+    Exists because graph generation used to re-derive every edge on each cache miss by
+    reading every source file off disk inside the request path (see
+    LearningService._build_deterministic_edges). That made graph latency proportional to
+    repository size, put blocking file I/O on the event loop, and coupled the graph to
+    the clone still being present -- which breaks after a redeploy or container restart.
+
+    Derivation now happens once per index, while the clone definitely exists, and the
+    read path is a single indexed query.
+    """
+    __tablename__ = "code_dependencies"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String(36), ForeignKey("repositories.id"), nullable=False)
+
+    # Repo-relative paths, matching CodeFile.path so they can be joined or mapped.
+    source_path = Column(String(1000), nullable=False)
+    target_path = Column(String(1000), nullable=False)
+
+    # How the edge was classified (_infer_relation) and how much to trust it
+    # (_build_deterministic_edges): relative imports score higher than bare specifiers.
+    relation = Column(String(50), nullable=False, default="imports")
+    weight = Column(Integer, default=1)
+    confidence = Column(Float, default=0.72)
+
+    # The raw specifier that produced this edge, kept for debugging why an edge exists.
+    specifier = Column(String(500), nullable=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    repository = relationship("Repository", back_populates="dependencies")
+
+    __table_args__ = (
+        # The read path always filters by repository first.
+        Index("ix_code_dependencies_repo", "repository_id"),
+        Index("ix_code_dependencies_repo_source", "repository_id", "source_path"),
+        Index("ix_code_dependencies_repo_target", "repository_id", "target_path"),
+        UniqueConstraint(
+            "repository_id", "source_path", "target_path", "relation",
+            name="uq_code_dependencies_edge",
+        ),
     )
 
 
