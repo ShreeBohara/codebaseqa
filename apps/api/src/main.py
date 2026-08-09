@@ -137,7 +137,10 @@ async def health_check():
         llm = get_llm_service()
         if hasattr(llm, 'health_check'):
             is_healthy = await llm.health_check()
-            checks["llm_provider"] = "ok" if is_healthy else "unavailable/unreachable"
+            # Must contain "error" so the critical_ok test below actually fails --
+            # the previous "unavailable/unreachable" wording passed that check, so an
+            # unreachable LLM was reported as healthy.
+            checks["llm_provider"] = "ok" if is_healthy else "error: provider unreachable"
     except Exception as e:
         checks["llm_provider"] = f"error: {str(e)[:50]}"
 
@@ -172,7 +175,13 @@ async def health_check():
             if not demo_repo:
                 checks["demo_repo"] = "initializing"
             else:
-                checks["demo_repo"] = f"{demo_repo.status} ({demo_repo.github_owner}/{demo_repo.github_name})"
+                # .value, not the member: IndexingStatus is a str-Enum, and since
+                # Python 3.11 f"{member}" renders "IndexingStatus.COMPLETED", so the
+                # startswith("completed") test below could never match and demo mode
+                # reported "degraded" permanently.
+                checks["demo_repo"] = (
+                    f"{demo_repo.status.value} ({demo_repo.github_owner}/{demo_repo.github_name})"
+                )
         except Exception as e:
             checks["demo_repo"] = f"error: {str(e)[:50]}"
         finally:

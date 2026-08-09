@@ -8,7 +8,7 @@ from typing import AsyncGenerator, Dict, List
 
 from openai import AsyncOpenAI
 
-from src.core.llm.base import BaseLLM
+from src.core.llm.base import BaseLLM, stream_error_text
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,13 @@ class OpenAILLM(BaseLLM):
                     await asyncio.sleep(wait_time)
                     continue
                 logger.error(f"Streaming generation failed: {e}")
-                yield f"\n\n[Error: {str(e)[:100]}]"
+                if not yielded:
+                    # Nothing reached the client yet. Raise so the route emits a real
+                    # SSE error event with a code, instead of a "successful" stream
+                    # whose entire content is an error string that then gets cached
+                    # and persisted as the assistant's answer.
+                    raise
+                yield stream_error_text(e)
                 return
 
     async def health_check(self) -> bool:

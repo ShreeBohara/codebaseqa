@@ -3,11 +3,33 @@ Configuration management with environment variable support.
 Designed for easy self-hosting with sensible defaults.
 """
 
+import json
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+# Settings where a blank value in .env is always a mistake rather than an intent.
+# pydantic-settings takes `FOO=` from the environment as the empty string, which
+# silently replaces the declared default -- e.g. a blank LOCAL_EMBEDDING_MODEL
+# turns into a request for the model named "".
+_BLANK_MEANS_DEFAULT = (
+    "llm_provider",
+    "embedding_provider",
+    "openai_model",
+    "openai_embedding_model",
+    "anthropic_model",
+    "ollama_model",
+    "ollama_base_url",
+    "local_embedding_model",
+    "database_url",
+    "chroma_persist_dir",
+    "repos_dir",
+    "vector_db_type",
+)
 
 
 class Settings(BaseSettings):
@@ -25,7 +47,12 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    # Stored as a raw string: pydantic-settings JSON-decodes complex types (List[str])
+    # inside EnvSettingsSource *before* field validators run, so a comma-separated
+    # CORS_ORIGINS would raise SettingsError at import and kill the process before
+    # uvicorn binds. Keeping it a str and parsing in the property accepts both the
+    # comma-separated form (docker-compose, .env.example) and a JSON array.
+    cors_origins_raw: Optional[str] = Field(default=None, validation_alias="CORS_ORIGINS")
 
     # Database
     database_url: str = "sqlite:///./data/codebaseqa.db"
@@ -58,10 +85,16 @@ class Settings(BaseSettings):
     openai_embedding_rate_limit_max_backoff_seconds: float = 30.0
     voyage_api_key: Optional[str] = None
     voyage_model: str = "voyage-code-3"
-    local_embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    # Must be an Ollama *tag* (as in `ollama pull <tag>`), not a HuggingFace repo id.
+    # A HF id such as "nomic-ai/nomic-embed-text-v1.5" 404s on every request, and with
+    # fail_open every chunk then lands in the index as a zero vector.
+    local_embedding_model: str = "nomic-embed-text"
     ollama_embedding_num_ctx: int = 2048  # Smaller context improves stability
     ollama_embedding_max_chars: int = 3000  # Safety cap per chunk for Ollama
     ollama_embedding_fail_open: bool = True  # Continue indexing on occasional failures
+    # Ceiling on fail-open: abort the batch once this fraction of chunks has failed,
+    # so a total misconfiguration cannot silently produce an all-zero-vector index.
+    ollama_embedding_max_failure_ratio: float = 0.2
 
     # GitHub
     github_token: Optional[str] = None
@@ -172,26 +205,48 @@ class Settings(BaseSettings):
     demo_graph_window_seconds: int = 60
     demo_challenge_requests: int = 10
     demo_challenge_window_seconds: int = 60
+    demo_quiz_requests: int = 8
+    demo_quiz_window_seconds: int = 60
 
     # Learning V2 controls
     learning_v2_enabled: bool = False
     learning_cache_ttl_days: int = 7
     learning_prompt_version: str = "learning_v2_1"
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator(*_BLANK_MEANS_DEFAULT, mode="before")
     @classmethod
-    def parse_cors_origins(cls, value):
-        """
-        Accept JSON lists or comma-separated strings for CORS_ORIGINS.
-        """
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return []
-            if stripped.startswith("["):
-                return value
-            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
+    def _blank_falls_back_to_default(cls, value, info: ValidationInfo):
+        """Treat a blank env assignment (FOO=) as 'unset' rather than the empty string."""
+        if isinstance(value, str) and not value.strip():
+            field = cls.model_fields.get(info.field_name)
+            if field is not None and field.default is not None:
+                return field.default
         return value
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """
+        Allowed CORS origins. Accepts a JSON array or a comma-separated string.
+        Falls back to the localhost defaults when unset or blank.
+        """
+        raw = self.cors_origins_raw
+        if raw is None:
+            return list(DEFAULT_CORS_ORIGINS)
+
+        stripped = raw.strip()
+        if not stripped:
+            return []
+
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError:
+                return list(DEFAULT_CORS_ORIGINS)
+            if isinstance(parsed, list):
+                return [str(origin).strip() for origin in parsed if str(origin).strip()]
+            return list(DEFAULT_CORS_ORIGINS)
+
+        return [origin.strip() for origin in stripped.split(",") if origin.strip()]
 
     model_config = SettingsConfigDict(
         env_file=".env",

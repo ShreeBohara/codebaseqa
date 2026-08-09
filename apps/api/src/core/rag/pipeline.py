@@ -5,6 +5,7 @@ Adds intent-aware retrieval, content-aware reranking, and prompt routing.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -15,6 +16,7 @@ from typing import AsyncGenerator, Dict, List, Optional
 
 from src.config import settings
 from src.core.cache.chat_cache import ChatCache
+from src.core.llm.base import STREAM_ERROR_MARKER
 
 logger = logging.getLogger(__name__)
 
@@ -712,7 +714,27 @@ Repository context:
     def _llm_model_name(self) -> str:
         return str(getattr(self._llm, "_model", self._llm.__class__.__name__))
 
-    async def _get_cached_answer(self, query: str, context: RetrievalResult) -> Optional[str]:
+    def _history_digest(self, history: Optional[List[Dict[str, str]]]) -> str:
+        """
+        Fingerprint the history that will actually go into the prompt.
+
+        The answer cache key must include this: _build_messages feeds history into
+        the prompt, so two sessions asking the same question with different history
+        get different answers. Without it, the second session is served the first
+        session's history-conditioned answer.
+        """
+        budgeted = self._apply_history_budget(history)
+        if not budgeted:
+            return "none"
+        payload = json.dumps(budgeted, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    async def _get_cached_answer(
+        self,
+        query: str,
+        context: RetrievalResult,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> Optional[str]:
         if not self._chat_cache:
             return None
         top_chunk_ids = [chunk.id for chunk in context.chunks[:12]]
@@ -722,10 +744,22 @@ Repository context:
             intent=context.intent,
             top_chunk_ids=top_chunk_ids,
             model=self._llm_model_name(),
+            history_digest=self._history_digest(history),
         )
 
-    async def _set_cached_answer(self, query: str, context: RetrievalResult, answer: str) -> None:
+    async def _set_cached_answer(
+        self,
+        query: str,
+        context: RetrievalResult,
+        answer: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> None:
         if not self._chat_cache:
+            return
+        # Never cache a response that carries the stream-failure marker: it would be
+        # replayed to everyone asking this question until the entry expires.
+        if STREAM_ERROR_MARKER in answer:
+            logger.warning("Skipping answer cache write for repo=%s: response was interrupted", self._repo_id)
             return
         top_chunk_ids = [chunk.id for chunk in context.chunks[:12]]
         await self._chat_cache.set_answer(
@@ -735,6 +769,7 @@ Repository context:
             top_chunk_ids=top_chunk_ids,
             model=self._llm_model_name(),
             answer=answer,
+            history_digest=self._history_digest(history),
         )
 
     async def generate(
@@ -744,13 +779,13 @@ Repository context:
         history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """Generate a non-streaming response."""
-        cached = await self._get_cached_answer(query=query, context=context)
+        cached = await self._get_cached_answer(query=query, context=context, history=history)
         if cached is not None:
             return cached
 
         messages = self._build_messages(query=query, context=context, history=history)
         result = await self._llm.generate(messages)
-        await self._set_cached_answer(query=query, context=context, answer=result)
+        await self._set_cached_answer(query=query, context=context, answer=result, history=history)
         return result
 
     async def generate_stream(
@@ -760,7 +795,7 @@ Repository context:
         history: Optional[List[Dict[str, str]]] = None,
     ) -> AsyncGenerator[str, None]:
         """Generate a streaming response."""
-        cached = await self._get_cached_answer(query=query, context=context)
+        cached = await self._get_cached_answer(query=query, context=context, history=history)
         if cached is not None:
             for i in range(0, len(cached), 320):
                 yield cached[i : i + 320]
@@ -773,4 +808,9 @@ Repository context:
             yield token
 
         if pieces:
-            await self._set_cached_answer(query=query, context=context, answer="".join(pieces))
+            await self._set_cached_answer(
+                query=query,
+                context=context,
+                answer="".join(pieces),
+                history=history,
+            )

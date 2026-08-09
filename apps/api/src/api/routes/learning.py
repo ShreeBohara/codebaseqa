@@ -1,7 +1,8 @@
+import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.core.demo_mode import assert_demo_repo_access
@@ -14,6 +15,7 @@ from src.services.gamification import GamificationService, UserStats
 from src.services.learning_service import LearningService
 
 router = APIRouter(tags=["learning"])
+logger = logging.getLogger(__name__)
 
 
 def _assert_learning_repo_access(service: LearningService, repo_id: str) -> None:
@@ -138,24 +140,32 @@ async def get_lesson(
         raise HTTPException(status_code=500, detail=str(e))
 
 class GenerateQuizRequest(BaseModel):
-    context_content: str
+    # Bounded like ChatMessageCreate.content (schemas.py): this string goes straight
+    # into an LLM prompt, so an unbounded body is an unmetered spend vector.
+    context_content: str = Field(..., max_length=20000)
 
 @router.post("/{repo_id}/lessons/{lesson_id}/quiz")
 async def generate_quiz(
     repo_id: str,
     lesson_id: str,
     request: GenerateQuizRequest,
+    http_request: Request,
     service: LearningService = Depends(get_learning_service)
 ):
     """Generate a quiz for a lesson."""
     _assert_learning_repo_access(service, repo_id)
+    # This is an LLM call; it needs the same demo throttling as chat/lesson/graph.
+    await enforce_demo_soft_limit(http_request, "quiz")
     try:
         quiz = await service.generate_quiz(repo_id, lesson_id, request.context_content)
         if not quiz:
             raise HTTPException(status_code=500, detail="Failed to generate quiz")
         return quiz
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Quiz generation failed for repo=%s lesson=%s", repo_id, lesson_id)
+        raise HTTPException(status_code=500, detail="Failed to generate quiz") from e
 
 @router.get("/{repo_id}/lessons/{lesson_id}/export/codetour", response_model=CodeTour)
 async def export_codetour(

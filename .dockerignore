@@ -1,17 +1,64 @@
 .git
 .github
+
+# -----------------------
+# Secrets -- must never enter an image layer.
+# docker/Dockerfile.api does `COPY apps/api .`, so an unignored apps/api/.env
+# would be baked into the image along with its API keys.
+# -----------------------
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+
+# -----------------------
+# Dependencies / virtualenvs
+# Both spellings: the checked-out venv is `.venv`, and only `venv` was listed
+# before, so a ~470MB Darwin-built venv was being sent to a Linux image.
+# -----------------------
 node_modules
 **/node_modules
+venv
+.venv
+**/venv
+**/.venv
+
+# -----------------------
+# Build outputs
+# -----------------------
 apps/web/.next
 apps/web/tsconfig.tsbuildinfo
 apps/web/next-env.d.ts
 apps/web/pnpm-lock.yaml
 apps/web/pnpm-workspace.yaml
-apps/api/venv
-apps/api/.pytest_cache
-apps/api/.ruff_cache
-apps/api/.coverage
+dist
+build
+**/__pycache__
+**/*.py[cod]
+
+# -----------------------
+# Test / coverage artifacts
+# -----------------------
+**/.pytest_cache
+**/.ruff_cache
+**/.coverage
+**/.coverage*
+**/coverage.xml
+**/htmlcov
+**/test_output.txt
+
+# -----------------------
+# Data & local state
+# -----------------------
 apps/api/data
 data
 Documents
 *.log
+
+# -----------------------
+# Docs (a 6.7MB PNG lives here; nothing in either image needs it)
+# -----------------------
+docs
+*.md
+!README.md

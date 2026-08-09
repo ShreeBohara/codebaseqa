@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Dict, List
 
 import httpx
 
-from src.core.llm.base import BaseLLM
+from src.core.llm.base import BaseLLM, stream_error_text
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,11 @@ class OllamaLLM(BaseLLM):
                     await asyncio.sleep(wait_time)
                     continue
                 logger.error(f"Ollama streaming failed: {e}")
-                yield f"\n\n[Error: {str(e)[:100]}]"
+                if not yielded:
+                    # See openai_llm.generate_stream: raise so the route reports a real
+                    # error rather than caching/persisting the error text as an answer.
+                    raise
+                yield stream_error_text(e)
                 return
 
     async def health_check(self) -> bool:
