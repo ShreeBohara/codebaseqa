@@ -10,11 +10,16 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, urlunparse
 
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Hosts that may receive the GitHub token. Must be matched exactly against the
+# parsed hostname -- a substring test such as `"github.com" in url` also matches
+# lookalike hosts like `github.com.attacker.tld`, which would hand the token to them.
+GITHUB_TOKEN_HOSTS = frozenset({"github.com", "www.github.com"})
 
 
 class RepoManager:
@@ -23,6 +28,38 @@ class RepoManager:
     def __init__(self):
         self._repos_dir = Path(settings.repos_dir)
         self._repos_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _authenticated_url(github_url: str) -> str:
+        """
+        Return the clone URL with the GitHub token injected, but only when the URL's
+        host is exactly a GitHub host. Any other host gets the URL unchanged.
+        """
+        token = settings.github_token
+        if not token:
+            return github_url
+
+        parsed = urlparse(github_url)
+        hostname = (parsed.hostname or "").lower()
+        if parsed.scheme not in {"http", "https"} or hostname not in GITHUB_TOKEN_HOSTS:
+            return github_url
+
+        netloc = f"{token}@{hostname}"
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc))
+
+    @staticmethod
+    def _redact(text: str) -> str:
+        """
+        Strip the GitHub token from subprocess output before it is logged, stored in
+        Repository.indexing_error, or streamed to a client. git echoes the full clone
+        URL -- credentials included -- in messages like 'fatal: repository ... not found'.
+        """
+        token = settings.github_token
+        if not token or not text:
+            return text
+        return text.replace(token, "***")
 
     @staticmethod
     def _sanitize_repo_segment(value: str, label: str) -> str:
@@ -56,12 +93,7 @@ class RepoManager:
 
     async def get_default_branch(self, github_url: str) -> str:
         """Get the default branch of a repository using git ls-remote."""
-        url = github_url
-        if settings.github_token and "github.com" in github_url:
-            url = github_url.replace(
-                "https://github.com",
-                f"https://{settings.github_token}@github.com"
-            )
+        url = self._authenticated_url(github_url)
 
         try:
             result = subprocess.run(
@@ -114,19 +146,8 @@ class RepoManager:
             "--branch", branch,
         ]
 
-        # Add token if available
-        if settings.github_token:
-            # Insert token into URL for private repos
-            if "github.com" in github_url:
-                url_with_auth = github_url.replace(
-                    "https://github.com",
-                    f"https://{settings.github_token}@github.com"
-                )
-                cmd.append(url_with_auth)
-            else:
-                cmd.append(github_url)
-        else:
-            cmd.append(github_url)
+        # Inject the token only for genuine GitHub hosts (see _authenticated_url).
+        cmd.append(self._authenticated_url(github_url))
 
         cmd.append(str(local_path))
 
@@ -141,7 +162,9 @@ class RepoManager:
             )
 
             if result.returncode != 0:
-                raise Exception(f"Git clone failed: {result.stderr}")
+                # Redact: stderr contains the credentialed clone URL, and this message
+                # is persisted to Repository.indexing_error and served over the API.
+                raise Exception(f"Git clone failed: {self._redact(result.stderr)}")
 
             return local_path
 

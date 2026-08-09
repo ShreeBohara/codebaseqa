@@ -25,6 +25,7 @@ def _bucket_limits() -> Dict[str, BucketConfig]:
         "lesson": (settings.demo_lesson_requests, settings.demo_lesson_window_seconds),
         "graph": (settings.demo_graph_requests, settings.demo_graph_window_seconds),
         "challenge": (settings.demo_challenge_requests, settings.demo_challenge_window_seconds),
+        "quiz": (settings.demo_quiz_requests, settings.demo_quiz_window_seconds),
     }
 
 

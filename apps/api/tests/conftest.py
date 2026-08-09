@@ -2,7 +2,7 @@ from typing import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 
@@ -14,8 +14,15 @@ def client() -> TestClient:
 
 @pytest.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    """Asynchronous test client for testing async endpoints."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    """
+    Asynchronous test client for testing async endpoints.
+
+    Uses ASGITransport explicitly: the `app=` shortcut was deprecated in httpx 0.27
+    and removed in 0.28, so `AsyncClient(app=app)` raises TypeError on any currently
+    installable httpx.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 @pytest.fixture

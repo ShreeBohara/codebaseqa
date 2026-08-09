@@ -49,6 +49,10 @@ class ParseResult:
     imports: List[str]
     exports: List[str]
     line_count: int = 0
+    # True when tree-sitter produced ERROR nodes. Tree-sitter does not raise on
+    # syntax it cannot handle -- it returns a tree containing ERROR nodes -- so
+    # callers must check this explicitly or they will silently index garbage chunks.
+    has_errors: bool = False
 
 
 class TreeSitterParser:
@@ -76,8 +80,18 @@ class TreeSitterParser:
             "class_body_types": ["class_body"],
         },
         "typescript": {
-            "extensions": [".ts", ".tsx"],
+            "extensions": [".ts"],
             "language": Language(tstypescript.language_typescript()),
+            "function_types": ["function_declaration", "method_definition", "arrow_function"],
+            "class_types": ["class_declaration", "interface_declaration", "enum_declaration"],
+            "import_types": ["import_declaration", "import_statement"],
+            "class_body_types": ["class_body"],
+        },
+        # .tsx needs the dedicated TSX grammar: the plain TypeScript grammar cannot
+        # parse JSX, so every .tsx file produced an ERROR tree and mis-aligned chunks.
+        "tsx": {
+            "extensions": [".tsx"],
+            "language": Language(tstypescript.language_tsx()),
             "function_types": ["function_declaration", "method_definition", "arrow_function"],
             "class_types": ["class_declaration", "interface_declaration", "enum_declaration"],
             "import_types": ["import_declaration", "import_statement"],
@@ -212,6 +226,7 @@ class TreeSitterParser:
             imports=imports,
             exports=[],
             line_count=content.count('\n') + 1,
+            has_errors=bool(root.has_error),
         )
 
     def _process_function(self, node: Node, content: str, context: str) -> Optional[CodeChunk]:
@@ -338,7 +353,19 @@ class TreeSitterParser:
         return list(default)
 
     def _get_text(self, node: Node, content: str) -> str:
-        return content[node.start_byte:node.end_byte]
+        """
+        Return a node's source text.
+
+        Uses node.text (the parser's own byte slice) rather than
+        content[node.start_byte:node.end_byte]. start_byte/end_byte are *byte*
+        offsets, so slicing the decoded str with them desynchronises as soon as the
+        file contains a single multi-byte character -- every chunk after that point
+        gets the wrong boundaries.
+        """
+        if node.text is not None:
+            return node.text.decode("utf-8", errors="replace")
+        # Fallback: re-encode and slice by byte offset (correct, just slower).
+        return content.encode("utf-8")[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
 
 
 @lru_cache(maxsize=20)

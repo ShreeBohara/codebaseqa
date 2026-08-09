@@ -416,6 +416,18 @@ class IndexingService:
             logger.warning("Parser failed for %s, falling back to raw indexing: %s", file_path, exc)
             return await self._index_raw_file(repo, file_path, repo_path, content)
 
+        # tree-sitter returns an ERROR-node tree rather than raising when it cannot
+        # parse the file, so the except above never fires for a grammar mismatch.
+        # Chunks carved out of an ERROR tree have wrong boundaries -- raw indexing
+        # is strictly better than mis-aligned AST chunks.
+        if result.has_errors:
+            logger.warning(
+                "Parser produced an ERROR tree for %s (language=%s); falling back to raw indexing",
+                file_path,
+                result.language,
+            )
+            return await self._index_raw_file(repo, file_path, repo_path, content)
+
         # Create CodeFile record
         relative_path = str(file_path.relative_to(repo_path))
         content_hash = hashlib.sha256(content.encode()).hexdigest()

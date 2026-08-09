@@ -101,6 +101,7 @@ class ChatCache:
         intent: str,
         top_chunk_ids: List[str],
         model: str,
+        history_digest: str = "none",
     ) -> str:
         digest = _hash_payload(
             {
@@ -109,6 +110,10 @@ class ChatCache:
                 "intent": intent,
                 "chunk_ids": top_chunk_ids[:12],
                 "model": model,
+                # The prompt includes conversation history, so the key must too --
+                # otherwise the same question in two different sessions collides and
+                # one session is served the other's history-conditioned answer.
+                "history": history_digest,
             }
         )
         return f"chat:answer:{digest}"
@@ -167,8 +172,9 @@ class ChatCache:
         intent: str,
         top_chunk_ids: List[str],
         model: str,
+        history_digest: str = "none",
     ) -> Optional[str]:
-        key = self._key_answer(repo_id, question, intent, top_chunk_ids, model)
+        key = self._key_answer(repo_id, question, intent, top_chunk_ids, model, history_digest)
         value = await self._redis_get(key)
         if value is None:
             value = self._local_get(self._answer_cache, key)
@@ -186,8 +192,9 @@ class ChatCache:
         top_chunk_ids: List[str],
         model: str,
         answer: str,
+        history_digest: str = "none",
     ) -> None:
-        key = self._key_answer(repo_id, question, intent, top_chunk_ids, model)
+        key = self._key_answer(repo_id, question, intent, top_chunk_ids, model, history_digest)
         self._local_set(self._answer_cache, key, answer)
         await self._redis_set(key, answer, settings.chat_answer_cache_ttl_seconds)
 

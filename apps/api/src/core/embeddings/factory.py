@@ -28,6 +28,7 @@ def create_embedding_service() -> BaseEmbeddings:
             max_chars=settings.ollama_embedding_max_chars,
             num_ctx=settings.ollama_embedding_num_ctx,
             fail_open=settings.ollama_embedding_fail_open,
+            max_failure_ratio=settings.ollama_embedding_max_failure_ratio,
         )
     else:
         # Fallback/Default or Raise

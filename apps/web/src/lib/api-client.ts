@@ -298,31 +298,59 @@ class ApiClient {
     const retryAfterHeader = res.headers.get('Retry-After');
     const retryAfter = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
 
+    // Read the body exactly once. res.json() consumes the stream even when parsing
+    // fails, so a subsequent res.text() throws "body stream already read" -- which is
+    // why every non-JSON error body (an nginx 502 page, a plain-text 500) used to be
+    // silently replaced by the generic fallback.
+    let raw = '';
     try {
-      const payload = await res.json();
-      if (payload?.detail && typeof payload.detail === 'object') {
-        return new ApiError(
-          payload.detail.message || fallbackMessage,
-          res.status,
-          payload.detail.code,
-          payload.detail.retry_after_seconds ?? retryAfter,
-        );
-      }
-
-      if (payload?.detail && typeof payload.detail === 'string') {
-        return new ApiError(payload.detail, res.status, undefined, retryAfter);
-      }
-    } catch {
-      // Fall back to text parsing below.
-    }
-
-    try {
-      const text = await res.text();
-      const clean = text.trim();
-      return new ApiError(clean || fallbackMessage, res.status, undefined, retryAfter);
+      raw = await res.text();
     } catch {
       return new ApiError(fallbackMessage, res.status, undefined, retryAfter);
     }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      // Not JSON: surface the body itself, which is more useful than a generic string.
+      return new ApiError(raw.trim() || fallbackMessage, res.status, undefined, retryAfter);
+    }
+
+    const detail = (payload as { detail?: unknown } | null)?.detail;
+
+    if (typeof detail === 'string') {
+      return new ApiError(detail, res.status, undefined, retryAfter);
+    }
+
+    // FastAPI validation errors send `detail` as an *array* of {loc, msg, type}.
+    // typeof [] === 'object', so the object branch below used to swallow these and
+    // read .message off an array -- turning every 422 into the generic fallback.
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((item) => {
+          const entry = item as { loc?: unknown[]; msg?: string } | null;
+          if (!entry?.msg) return null;
+          const field = Array.isArray(entry.loc)
+            ? entry.loc.filter((p) => p !== 'body').join('.')
+            : '';
+          return field ? `${field}: ${entry.msg}` : entry.msg;
+        })
+        .filter((m): m is string => Boolean(m));
+      return new ApiError(messages.join('; ') || fallbackMessage, res.status, 'VALIDATION_ERROR', retryAfter);
+    }
+
+    if (detail && typeof detail === 'object') {
+      const obj = detail as { message?: string; code?: string; retry_after_seconds?: number };
+      return new ApiError(
+        obj.message || fallbackMessage,
+        res.status,
+        obj.code,
+        obj.retry_after_seconds ?? retryAfter,
+      );
+    }
+
+    return new ApiError(fallbackMessage, res.status, undefined, retryAfter);
   }
 
   private async ensureOk(res: Response, fallbackMessage: string): Promise<void> {

@@ -7,6 +7,17 @@ from src.core.embeddings.base import BaseEmbeddings
 
 logger = logging.getLogger(__name__)
 
+
+class OllamaModelNotFound(RuntimeError):
+    """
+    Ollama does not have the requested model.
+
+    Deliberately not an httpx exception: the retry policy below retries httpx errors,
+    and a missing model is permanent, so retrying it just burns the whole backoff
+    budget (10 attempts, up to 30s apart) on every single chunk before failing.
+    """
+
+
 class OllamaEmbeddings(BaseEmbeddings):
     """Ollama embedding service for local embeddings."""
 
@@ -20,6 +31,9 @@ class OllamaEmbeddings(BaseEmbeddings):
         "llama3.1": 4096,
     }
 
+    # Don't judge the failure ratio off the first one or two chunks.
+    FAILURE_RATIO_MIN_SAMPLE = 5
+
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
@@ -27,6 +41,7 @@ class OllamaEmbeddings(BaseEmbeddings):
         max_chars: int | None = None,
         num_ctx: int | None = None,
         fail_open: bool = True,
+        max_failure_ratio: float = 0.2,
     ):
         self._base_url = base_url.rstrip("/")
         self._model = model
@@ -34,6 +49,7 @@ class OllamaEmbeddings(BaseEmbeddings):
         self._max_chars = max_chars
         self._num_ctx = num_ctx
         self._fail_open = fail_open
+        self._max_failure_ratio = max(0.0, min(1.0, float(max_failure_ratio)))
         # Try to infer dimensions if model name contains typical hints, or defaulting
 
     @property
@@ -87,7 +103,10 @@ class OllamaEmbeddings(BaseEmbeddings):
 
             if response.status_code == 404:
                 logger.error(f"Model {self._model} not found in Ollama. Please run: ollama pull {self._model}")
-                raise httpx.HTTPStatusError("Model not found", request=response.request, response=response)
+                raise OllamaModelNotFound(
+                    f"Ollama has no model '{self._model}'. Run: ollama pull {self._model} "
+                    f"(LOCAL_EMBEDDING_MODEL must be an Ollama tag, not a HuggingFace repo id)."
+                )
 
             if response.status_code >= 500:
                 logger.error(f"Ollama Server Error ({response.status_code}): {response.text}")
@@ -106,6 +125,7 @@ class OllamaEmbeddings(BaseEmbeddings):
             return payload["embedding"]
 
         embeddings = []
+        failures = 0
         # Use a longer timeout for the client session overall, though per-request applies
         async with httpx.AsyncClient(timeout=120.0) as client:
             total = len(texts)
@@ -122,9 +142,28 @@ class OllamaEmbeddings(BaseEmbeddings):
                     if (i + 1) % 10 == 0:
                          logger.debug(f"Embedded {i+1}/{total} chunks")
 
+                except OllamaModelNotFound:
+                    # Permanent misconfiguration: never fail open, never retry.
+                    raise
                 except Exception as e:
                     logger.error(f"Ollama embedding failed at index {i} (text length: {len(val)}): {e}")
                     if self._fail_open:
+                        failures += 1
+                        # Fail-open is meant to absorb the occasional hiccup, not a
+                        # total misconfiguration (e.g. a model name Ollama cannot
+                        # resolve, which 404s on every chunk). Past the ceiling, stop:
+                        # an index of zero vectors scores every chunk identically and
+                        # makes retrieval arbitrary while reporting full confidence.
+                        attempted = i + 1
+                        if attempted >= self.FAILURE_RATIO_MIN_SAMPLE and (
+                            failures / attempted
+                        ) > self._max_failure_ratio:
+                            raise RuntimeError(
+                                f"Ollama embedding aborted: {failures}/{attempted} chunks failed "
+                                f"(> {self._max_failure_ratio:.0%} ceiling). "
+                                f"Check that model '{self._model}' is pulled and reachable at "
+                                f"{self._base_url} -- it must be an Ollama tag, not a HuggingFace id."
+                            ) from e
                         embeddings.append([0.0] * self.dimensions)
                         continue
                     raise

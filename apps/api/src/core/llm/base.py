@@ -1,6 +1,17 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Dict, List
 
+# Marker a provider emits inline when a stream fails *after* it has already sent
+# tokens (a total failure raises instead). Callers must not cache or persist a
+# response containing this -- otherwise one transient upstream error is served to
+# every subsequent asker for the life of the cache entry.
+STREAM_ERROR_MARKER = "[stream-error]"
+
+
+def stream_error_text(exc: Exception) -> str:
+    """Inline text appended to a partially-delivered stream that then failed."""
+    return f"\n\n{STREAM_ERROR_MARKER} generation was interrupted: {str(exc)[:100]}"
+
 
 class BaseLLM(ABC):
     """Abstract base class for LLM providers."""
