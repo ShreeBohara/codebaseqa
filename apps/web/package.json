@@ -7,8 +7,10 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest",
-    "type-check": "tsc --noEmit"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "next typegen && tsc --noEmit",
+    "clean": "rm -rf .next node_modules tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@types/react-syntax-highlighter": "^15.5.13",
