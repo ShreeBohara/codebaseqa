@@ -16,7 +16,13 @@ from src.config import settings
 from src.core.llm.openai_llm import OpenAILLM
 from src.core.vectorstore.chroma_store import ChromaStore
 from src.models.codetour_schemas import CodeTour, CodeTourStep
-from src.models.database import CodeFile, LearningLesson, LearningSyllabus, Repository
+from src.models.database import (
+    CodeDependency,
+    CodeFile,
+    LearningLesson,
+    LearningSyllabus,
+    Repository,
+)
 from src.models.learning import (
     CacheInfo,
     CodeReference,
@@ -1374,7 +1380,7 @@ Return clean JSON:
         file_nodes_by_id: Dict[str, GraphNode] = {
             path: self._build_graph_node_from_file(path, file_map[path]) for path in sorted(code_paths)
         }
-        file_edges = self._build_deterministic_edges(repo, sorted(code_paths), all_paths, file_map)
+        file_edges = self._load_or_derive_edges(repo, sorted(code_paths), all_paths, file_map)
 
         for edge in file_edges:
             if edge.source in file_map and edge.source not in file_nodes_by_id:
@@ -1894,6 +1900,59 @@ Return clean JSON:
             exports=(code_file.exports or [])[:6],
             module_key=self._module_key_for_path(path),
         )
+
+    def _load_or_derive_edges(
+        self,
+        repo: Repository,
+        source_paths: List[str],
+        all_paths: Set[str],
+        file_map: Dict[str, CodeFile],
+    ) -> List[GraphEdge]:
+        """
+        Prefer edges persisted at index time; derive on demand only as a fallback.
+
+        The fallback exists for two real cases: repositories indexed before
+        code_dependencies existed, and an index whose graph derivation step failed. Both
+        self-heal on the next re-index. Deriving here is the slow path -- it reads every
+        source file off disk inside the request -- so it is worth knowing which one ran,
+        hence the debug log.
+        """
+        persisted = (
+            self._db.query(CodeDependency)
+            .filter(CodeDependency.repository_id == repo.id)
+            .all()
+        )
+
+        if persisted:
+            known = set(all_paths)
+            edges = [
+                GraphEdge(
+                    source=row.source_path,
+                    target=row.target_path,
+                    label=row.relation or "imports",
+                    type=row.relation or "imports",
+                    relation=row.relation or "imports",
+                    weight=row.weight or 1,
+                    confidence=row.confidence if row.confidence is not None else 0.72,
+                )
+                # A file can disappear from the graph's node set (scope filters, the
+                # node cap) while its edges remain in the table, so both endpoints must
+                # still be present or the client receives an edge to a missing node.
+                for row in persisted
+                if row.source_path in known and row.target_path in known
+            ]
+            logger.debug(
+                "Graph edges for %s served from code_dependencies (%d of %d rows in scope)",
+                repo.id, len(edges), len(persisted),
+            )
+            return edges
+
+        logger.info(
+            "No persisted dependency edges for %s; deriving from disk on the request "
+            "path. Re-index to populate code_dependencies.",
+            repo.id,
+        )
+        return self._build_deterministic_edges(repo, source_paths, all_paths, file_map)
 
     def _build_deterministic_edges(
         self,
