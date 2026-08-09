@@ -1,9 +1,12 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "globalDependencies": [
-        ".env.local"
+        "apps/web/.env.local"
     ],
     "tasks": {
+        "clean": {
+            "cache": false
+        },
         "build": {
             "dependsOn": [
                 "^build"
@@ -25,7 +28,7 @@
         },
         "test": {
             "dependsOn": [
-                "build"
+                "^build"
             ]
         },
         "type-check": {
