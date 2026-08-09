@@ -50,6 +50,33 @@ So the SQLite database, the ChromaDB directory and every cloned repository live 
 - `docker-compose.yml` also declares a named volume `data:` that nothing mounts.
   It has no effect; the bind mount above is what is actually used.
 
+## Using Azure OpenAI
+
+Set these in `docker/.env` (compose forwards all of them):
+
+```bash
+LLM_PROVIDER=azure_openai
+EMBEDDING_PROVIDER=azure_openai
+AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_DEPLOYMENT=my-gpt4o-deployment
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=my-embedding-deployment
+AZURE_OPENAI_TOKENIZER_MODEL=text-embedding-3-small
+# match your deployed embedding model: 3-small is 1536, 3-large is 3072
+OPENAI_EMBEDDING_DIMENSIONS=1536
+```
+
+Two Azure-specific gotchas, both handled but worth understanding:
+
+- **Deployment names, not model ids.** Azure sends the deployment name where a model
+  id normally goes, so `AZURE_OPENAI_DEPLOYMENT` is what reaches the API as `model`.
+- **`/models` lists deployments.** Some Azure configurations do not expose that route
+  at all. `/api/health` treats a 404 there as reachable (the endpoint answered) while
+  still failing on 401/403, so a working deployment is not reported as down.
+
+Authentication is API-key only. Entra ID / managed identity is not wired up — the
+client accepts a callable token provider, but nothing here supplies one.
+
 ## Using Ollama from inside Docker
 
 `OLLAMA_BASE_URL` defaults to `http://localhost:11434`, which is correct when you

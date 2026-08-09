@@ -8,11 +8,37 @@ def create_embedding_service() -> BaseEmbeddings:
     """Factory function to create embedding service based on configuration."""
     provider = settings.embedding_provider.lower()
 
-    if provider == "openai":
+    if provider in ("azure_openai", "azure"):
+        # Same client, Azure v1 base_url, deployment name in place of the model id.
+        # tokenizer_model is passed separately because tiktoken cannot resolve an
+        # encoding from a deployment name.
+        if not settings.azure_openai_api_key:
+            raise ValueError("AZURE_OPENAI_API_KEY required for the azure_openai provider")
+        if not settings.azure_openai_embedding_deployment:
+            raise ValueError(
+                "AZURE_OPENAI_EMBEDDING_DEPLOYMENT required for the azure_openai "
+                "embedding provider (the embedding deployment name)"
+            )
+        return OpenAIEmbeddings(
+            api_key=settings.azure_openai_api_key,
+            model=settings.azure_openai_embedding_deployment,
+            base_url=settings.azure_openai_base_url(),
+            dimensions=settings.openai_embedding_dimensions,
+            tokenizer_model=settings.azure_openai_tokenizer_model,
+            max_tokens_per_request=settings.openai_embedding_max_tokens_per_request,
+            max_texts_per_request=settings.openai_embedding_max_texts_per_request,
+            request_concurrency=settings.openai_embedding_request_concurrency,
+            min_seconds_between_requests=settings.openai_embedding_min_seconds_between_requests,
+            rate_limit_max_retries=settings.openai_embedding_rate_limit_max_retries,
+            rate_limit_base_backoff_seconds=settings.openai_embedding_rate_limit_base_backoff_seconds,
+            rate_limit_max_backoff_seconds=settings.openai_embedding_rate_limit_max_backoff_seconds,
+        )
+    elif provider == "openai":
         return OpenAIEmbeddings(
             api_key=settings.openai_api_key,
             model=settings.openai_embedding_model,
             base_url=settings.openai_base_url,
+            dimensions=settings.openai_embedding_dimensions,
             max_tokens_per_request=settings.openai_embedding_max_tokens_per_request,
             max_texts_per_request=settings.openai_embedding_max_texts_per_request,
             request_concurrency=settings.openai_embedding_request_concurrency,
@@ -31,11 +57,12 @@ def create_embedding_service() -> BaseEmbeddings:
             max_failure_ratio=settings.ollama_embedding_max_failure_ratio,
         )
     else:
-        # Fallback/Default or Raise
-        # For now, if unknown, default to OpenAI if key exists, else error
-        if settings.openai_api_key:
-             return OpenAIEmbeddings(
-                api_key=settings.openai_api_key,
-                model=settings.openai_embedding_model
-            )
-        raise ValueError(f"Unknown embedding provider: {provider}")
+        # Fail fast, matching src/core/llm/factory.py. This previously fell back to
+        # OpenAI whenever a key happened to be present, which meant a typo in
+        # EMBEDDING_PROVIDER silently produced an OpenAI client with *none* of the
+        # rate-limit, batching or pacing settings applied -- so indexing behaved
+        # differently from the configured provider with no error anywhere.
+        raise ValueError(
+            f"Unknown embedding provider: {provider!r}. "
+            "Expected one of: openai, azure_openai, ollama."
+        )

@@ -4,9 +4,15 @@ OpenAI LLM service with streaming support.
 
 import asyncio
 import logging
-from typing import AsyncGenerator, Dict, List
+from typing import AsyncGenerator, Callable, Dict, List
 
-from openai import AsyncOpenAI
+from openai import (
+    APIStatusError,
+    AsyncOpenAI,
+    AuthenticationError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 
 from src.core.llm.base import BaseLLM, stream_error_text
 
@@ -16,13 +22,23 @@ logger = logging.getLogger(__name__)
 class OpenAILLM(BaseLLM):
     """OpenAI LLM service with retry logic."""
 
-    def __init__(self, api_key: str = None, model: str = "gpt-4o", base_url: str | None = None):
+    def __init__(
+        self,
+        api_key: str | Callable[[], str] | None = None,
+        model: str = "gpt-4o",
+        base_url: str | None = None,
+        provider_label: str = "openai",
+    ):
+        # api_key accepts a callable so a token provider (e.g. Entra ID) can be passed
+        # without this class needing to know how the credential is obtained.
         client_kwargs = {"api_key": api_key}
         if base_url:
             client_kwargs["base_url"] = base_url
         self._client = AsyncOpenAI(**client_kwargs)
         self._model = model
         self._max_retries = 3
+        # Only used for log messages; behaviour is identical across OpenAI-compatible hosts.
+        self._provider_label = provider_label
 
     async def _retry_with_backoff(self, func, *args, **kwargs):
         """Retry with exponential backoff."""
@@ -122,11 +138,36 @@ class OpenAILLM(BaseLLM):
                 return
 
     async def health_check(self) -> bool:
-        """Check OpenAI API availability."""
+        """
+        Check provider availability.
+
+        Distinguishes "cannot reach the provider" from "provider does not implement
+        /models". Azure serves an OpenAI-compatible surface but /models enumerates
+        *deployments*, and some configurations do not expose it at all -- a 404 there
+        means the endpoint answered, so credentials and networking are fine and the
+        service is usable. Treating that as unhealthy would report a working Azure
+        deployment as down.
+        """
         try:
-            # Simple models list call to verify API key
             await self._client.models.list()
             return True
+        except NotFoundError:
+            logger.info(
+                "%s does not expose /models; treating as reachable (endpoint responded)",
+                self._provider_label,
+            )
+            return True
+        except (AuthenticationError, PermissionDeniedError) as e:
+            logger.warning("%s health check failed: bad credentials: %s", self._provider_label, e)
+            return False
+        except APIStatusError as e:
+            # Any other HTTP status still proves the endpoint is reachable, but an
+            # unexpected status is worth surfacing rather than silently passing.
+            logger.warning(
+                "%s health check got unexpected status %s: %s",
+                self._provider_label, e.status_code, e,
+            )
+            return False
         except Exception as e:
-            logger.warning(f"OpenAI health check failed: {e}")
+            logger.warning("%s health check failed: %s", self._provider_label, e)
             return False
