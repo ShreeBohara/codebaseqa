@@ -122,3 +122,40 @@ def get_redis_client():
 def get_chat_cache() -> ChatCache:
     """Get chat cache service with Redis+memory fallback."""
     return ChatCache(redis_client=get_redis_client())
+
+
+@lru_cache()
+def get_graph_driver():
+    """
+    Long-lived Neo4j async driver, or None when the graph read model is disabled.
+
+    The driver owns a connection pool, so it must be a singleton and must be closed on
+    shutdown (see main.py lifespan). Returns None rather than raising so that every
+    caller can treat "no graph store" as an ordinary fallback path.
+    """
+    if not settings.neo4j_enabled:
+        return None
+    if not settings.neo4j_password:
+        logger.warning("NEO4J_ENABLED is set but NEO4J_PASSWORD is empty; graph store disabled")
+        return None
+
+    try:
+        from neo4j import AsyncGraphDatabase
+
+        return AsyncGraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+        )
+    except Exception as exc:
+        logger.warning("Neo4j driver unavailable, falling back to SQL graph: %s", exc)
+        return None
+
+
+def get_graph_store():
+    """Neo4jGraphStore bound to the shared driver, or None when disabled."""
+    driver = get_graph_driver()
+    if driver is None:
+        return None
+    from src.core.graph.neo4j_store import Neo4jGraphStore
+
+    return Neo4jGraphStore(driver, database=settings.neo4j_database)
