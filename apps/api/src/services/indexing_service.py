@@ -228,7 +228,51 @@ class IndexingService:
             "Derived %d dependency edges for %s/%s at index time",
             len(rows), repo.github_owner, repo.github_name,
         )
+
+        # Project into the Neo4j read model if it is enabled. SQL stays authoritative,
+        # so a failure here is logged and ignored -- the graph endpoint falls back.
+        await self._sync_graph_store(repo, files, rows)
+
         return len(rows)
+
+    async def _sync_graph_store(self, repo, files, edge_rows) -> None:
+        """Mirror the freshly derived graph into Neo4j. Never raises."""
+        from src.dependencies import get_graph_store
+
+        store = get_graph_store()
+        if store is None:
+            return
+
+        try:
+            from src.services.learning_service import LearningService
+            service = LearningService(self._db, llm=None, vector_store=None)
+
+            file_payload = [
+                {
+                    "path": f.path,
+                    "filename": f.filename,
+                    "extension": f.extension,
+                    "language": f.language,
+                    "loc": f.line_count or 0,
+                    "module_key": service._module_key_for_path(f.path),
+                }
+                for f in files
+            ]
+            edge_payload = [
+                {
+                    "source": r.source_path,
+                    "target": r.target_path,
+                    "relation": r.relation or "imports",
+                    "weight": r.weight or 1,
+                    "confidence": r.confidence if r.confidence is not None else 0.72,
+                }
+                for r in edge_rows
+            ]
+            await store.sync_repository(repo.id, file_payload, edge_payload)
+        except Exception as exc:
+            logger.warning(
+                "Neo4j graph sync failed for %s (SQL graph is unaffected): %s", repo.id, exc
+            )
 
     def _find_files(self, repo_path: Path) -> List[Path]:
         """Find all indexable files in repository."""

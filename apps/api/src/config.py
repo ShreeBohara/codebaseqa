@@ -30,6 +30,8 @@ _BLANK_MEANS_DEFAULT = (
     "repos_dir",
     "vector_db_type",
     "azure_openai_tokenizer_model",
+    "neo4j_uri",
+    "neo4j_user",
 )
 
 
@@ -230,6 +232,22 @@ class Settings(BaseSettings):
     demo_challenge_window_seconds: int = 60
     demo_quiz_requests: int = 8
     demo_quiz_window_seconds: int = 60
+
+    # Neo4j graph read model (optional)
+    #
+    # Off by default. code_dependencies (SQL) stays authoritative; this is a projection
+    # rebuilt at index time, and every read falls back to SQL when Neo4j is unreachable,
+    # so enabling it cannot take the graph endpoint down.
+    #
+    # Do not point this at AuraDB Free for anything public: a Free instance auto-pauses
+    # after 72 hours idle and a paused instance's hostname stops resolving, so the graph
+    # silently falls back to SQL until someone resumes it by hand.
+    neo4j_enabled: bool = False
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: Optional[str] = None
+    neo4j_database: Optional[str] = None  # None uses the server default
+    neo4j_max_traversal_hops: int = 5
 
     # Learning V2 controls
     learning_v2_enabled: bool = False

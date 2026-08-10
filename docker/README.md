@@ -50,6 +50,41 @@ So the SQLite database, the ChromaDB directory and every cloned repository live 
 - `docker-compose.yml` also declares a named volume `data:` that nothing mounts.
   It has no effect; the bind mount above is what is actually used.
 
+## Optional: Neo4j graph read model
+
+Off by default. `code_dependencies` in SQLite stays authoritative; Neo4j is a projection
+rebuilt at index time, and every read falls back to SQL if Neo4j is unreachable — so
+turning this on cannot take the graph endpoint down.
+
+```bash
+docker compose up -d neo4j
+# then in docker/.env
+NEO4J_ENABLED=true
+NEO4J_PASSWORD=<something>
+```
+
+Re-index a repository to populate it, then browse at http://localhost:7474.
+
+To confirm the projection matches SQL:
+
+```cypher
+MATCH (f:File {repo_id: $repo}) RETURN count(f);
+MATCH (:File {repo_id: $repo})-[r:IMPORTS]->(:File) RETURN count(r);
+```
+
+Those two counts should equal `SELECT count(*) FROM code_files` and
+`SELECT count(*) FROM code_dependencies` for the same repository.
+
+**Do not point this at AuraDB Free for anything public.** A Free instance auto-pauses
+after 72 hours idle, and a paused instance's hostname stops resolving — so the graph
+would silently fall back to SQL until someone resumes it by hand. Free instances are
+deleted after 30 days paused.
+
+Degree and centrality use Cypher `COUNT {}` subqueries rather than Graph Data Science:
+the in-database GDS plugin requires AuraDB Professional or above, and Aura Graph
+Analytics sessions are an offline batch shape (2GB, one concurrent session, 30-minute
+TTL) that does not fit a synchronous request.
+
 ## Using Azure OpenAI
 
 Set these in `docker/.env` (compose forwards all of them):

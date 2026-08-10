@@ -15,6 +15,8 @@ from src.config import settings
 from src.dependencies import (
     get_chat_cache,
     get_db_engine,
+    get_graph_driver,
+    get_graph_store,
     get_redis_client,
     get_session_factory,
     get_vector_store,
@@ -58,11 +60,31 @@ async def lifespan(app: FastAPI):
     await vector_store.initialize()
     logger.info("Vector store initialized")
 
+    # Optional Neo4j read model. Non-fatal by design: the graph endpoint falls back to
+    # the SQL path, so an unreachable graph database must not stop the API booting.
+    graph_store = get_graph_store()
+    if graph_store is not None:
+        try:
+            if await graph_store.verify():
+                await graph_store.ensure_schema()
+                logger.info("Neo4j graph store initialized")
+            else:
+                logger.warning("Neo4j unreachable; graph requests will use the SQL fallback")
+        except Exception as exc:
+            logger.warning("Neo4j initialization failed, using SQL fallback: %s", exc)
+
     yield
 
     # Shutdown
     logger.info("Shutting down CodebaseQA API...")
     await vector_store.close()
+    graph_driver = get_graph_driver()
+    if graph_driver is not None:
+        try:
+            await graph_driver.close()
+        except Exception:
+            pass
+
     redis_client = get_redis_client()
     if redis_client is not None:
         try:

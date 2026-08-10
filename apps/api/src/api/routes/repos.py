@@ -17,7 +17,7 @@ from src.core.demo_mode import (
     is_demo_mode,
 )
 from src.core.github.repo_manager import RepoManager
-from src.dependencies import get_db, get_session_factory, get_vector_store
+from src.dependencies import get_db, get_graph_store, get_session_factory, get_vector_store
 from src.models.database import IndexingStatus, Repository
 from src.models.schemas import RepoCreate, RepoListResponse, RepoResponse
 from src.services.indexing_service import IndexingService
@@ -202,7 +202,16 @@ async def delete_repository(
     # Delete from vector store
     await vector_store.delete_collection(repo_id)
 
-    # Delete from database
+    # Remove the Neo4j projection before the SQL rows go, so a failure here leaves the
+    # authoritative data intact and retryable rather than orphaning a subgraph.
+    graph_store = get_graph_store()
+    if graph_store is not None:
+        try:
+            await graph_store.delete_repository(repo_id)
+        except Exception as exc:
+            logger.warning("Failed to delete Neo4j subgraph for %s: %s", repo_id, exc)
+
+    # Delete from database (cascades to files, chunks, dependencies and chat sessions)
     db.delete(repo)
     db.commit()
 
