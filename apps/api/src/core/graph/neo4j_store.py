@@ -42,6 +42,9 @@ SCHEMA_STATEMENTS: Sequence[str] = (
 # Batched so a large repository does not build one enormous transaction.
 _INGEST_BATCH = 500
 
+# Nodes removed per delete transaction.
+_DELETE_BATCH = 1000
+
 _MERGE_FILES = """
 UNWIND $rows AS row
 MERGE (f:File {repo_id: $repo_id, path: row.path})
@@ -109,9 +112,17 @@ ORDER BY size, cycle
 LIMIT $limit
 """
 
-_DELETE_REPO = """
+# Batched with LIMIT rather than "CALL { ... } IN TRANSACTIONS", which the server
+# rejects outright: driver.execute_query() runs inside an explicit transaction, and
+# IN TRANSACTIONS is only legal in an implicit one
+# (Neo.DatabaseError.Transaction.TransactionStartFailed). Looping bounded deletes keeps
+# each transaction small without needing implicit-transaction semantics, and avoids the
+# CALL (n) {...} scoped-variable syntax, which only exists from Neo4j 5.23.
+_DELETE_REPO_BATCH = """
 MATCH (n {repo_id: $repo_id})
-CALL (n) { DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS
+WITH n LIMIT $batch
+DETACH DELETE n
+RETURN count(n) AS deleted
 """
 
 
@@ -182,9 +193,24 @@ class Neo4jGraphStore:
         )
         return {"files": len(files), "edges": len(edges)}
 
-    async def delete_repository(self, repo_id: str) -> None:
-        """Remove a repository's subgraph. Called on re-sync and on repo deletion."""
-        await self._run(_DELETE_REPO, repo_id=repo_id)
+    async def delete_repository(self, repo_id: str) -> int:
+        """
+        Remove a repository's subgraph, in bounded batches.
+
+        Returns the number of nodes deleted. Loops because each call deletes at most
+        _DELETE_BATCH nodes; a repository with more than that would otherwise be only
+        partially removed, which on the re-sync path would silently leave stale edges.
+        """
+        total = 0
+        while True:
+            rows = await self._run(
+                _DELETE_REPO_BATCH, repo_id=repo_id, batch=_DELETE_BATCH
+            )
+            deleted = (rows[0].get("deleted") if rows else 0) or 0
+            total += deleted
+            if deleted < _DELETE_BATCH:
+                break
+        return total
 
     # --- reads -------------------------------------------------------------------
 
