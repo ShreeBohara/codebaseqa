@@ -83,12 +83,25 @@ def _post(client, query, **variables):
 
 
 def test_graphql_is_mounted_alongside_rest(gql_env):
-    """Additive, not a migration: the REST routes must still exist."""
-    client, _, _ = gql_env
+    """
+    Additive, not a migration.
+
+    Asserted behaviourally rather than by introspecting app.routes: the path
+    GraphQLRouter registers differs between Strawberry versions (it resolved to
+    "/graphql" locally and to "" under the version CI installed), so checking the route
+    table tests the framework's internals instead of ours.
+    """
+    client, repo_id, _ = gql_env
+
+    # GraphQL answers.
+    res = client.post("/graphql", json={"query": "{ __typename }"})
+    assert res.status_code == 200, res.text
+    assert res.json()["data"]["__typename"] == "Query"
+
+    # And REST still answers, on the same app.
+    assert client.get(f"/api/learning/{repo_id}/stats").status_code == 200
     paths = {getattr(r, "path", "") for r in app.routes}
-    assert "/graphql" in paths
-    assert any(p.startswith("/api/learning") for p in paths)
-    assert any(p.startswith("/api/chat") for p in paths)
+    assert any(p.startswith("/api/chat") for p in paths), "chat must remain on REST/SSE"
 
 
 def test_repo_query(gql_env):
