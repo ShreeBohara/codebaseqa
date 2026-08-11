@@ -455,3 +455,43 @@ pnpm web:verify-css
 ## License
 
 MIT
+
+## GraphQL (optional, alongside REST)
+
+A GraphQL surface is mounted at `/graphql` **in addition to** the REST API — nothing was
+migrated, and every REST route still works.
+
+It exists for one measured reason: completing a lesson used to be five HTTP round trips
+(the POST already returned `{xp_gained, stats}`, the client discarded them and fired four
+more GETs for stats, achievements, activity and completed lessons). Two operations
+collapse that:
+
+```graphql
+query { learnerDashboard(repoId: "...") {
+  stats { totalXp level { level title } }
+  achievements { key unlocked }
+  activity { date count }
+  completedLessons
+} }
+
+mutation { completeLesson(repoId: "...", lessonId: "...", timeSpentSeconds: 120) {
+  xpGained { amount reason }
+  dashboard { stats { totalXp } completedLessons }   # post-mutation state inline
+} }
+```
+
+Two deliberate boundaries:
+
+- **Chat stays on REST/SSE.** GraphQL's incremental delivery (`@defer`/`@stream`) is not
+  ratified — absent from the September 2025 spec edition, RFC open since 2024-09-18, and
+  Strawberry's support is experimental requiring `graphql-core>=3.3.0a9` against 3.2.11
+  stable. Token streaming over GraphQL would mean betting on an unratified extension.
+- **Every resolver is `async` and offloads DB work via `run_in_threadpool`.** Strawberry
+  has no threadpool for sync resolvers (unlike FastAPI), and this app uses a synchronous
+  SQLAlchemy `Session` — one sync resolver would serialize blocking SQLite calls on the
+  event loop and stall in-flight chat streams. A test enforces this.
+
+Note on the benefit: GraphQL does **not** reduce database work here. Measured, the
+combined resolver issues slightly more SQL than the four REST handlers. What it removes
+is four network round trips, four dependency-injection cycles and four session
+open/close pairs.
