@@ -30,7 +30,22 @@ from src.models.database import Base, Repository
 
 @pytest.fixture()
 def gql_env(tmp_path, monkeypatch):
-    """Point the GraphQL resolvers at an isolated database and seed one repository."""
+    """
+    Point the GraphQL resolvers at an isolated database and seed one repository.
+
+    Two details that exist because this test must not depend on the developer's machine:
+
+    1. A dummy OPENAI_API_KEY is set. Provider clients are constructed eagerly by the
+       dependency factories, so without a key the app cannot be built at all -- and on a
+       developer machine apps/api/.env silently supplies a real one, which made this pass
+       locally and fail in CI. No request here reaches a provider.
+    2. TestClient is NOT used as a context manager, so the lifespan does not run. These
+       tests exercise the GraphQL resolvers, which open their own sessions via
+       get_session_factory; running the lifespan would additionally require a reachable
+       vector store. This matches how conftest.py builds its client.
+    """
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+
     engine = create_engine(f"sqlite:///{tmp_path / 'gql.db'}")
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
@@ -56,8 +71,7 @@ def gql_env(tmp_path, monkeypatch):
     def _count(conn, cursor, statement, params, context, executemany):
         counter["n"] += 1
 
-    with TestClient(app) as client:
-        yield client, repo_id, counter
+    yield TestClient(app), repo_id, counter
 
 
 def _post(client, query, **variables):
