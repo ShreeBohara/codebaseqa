@@ -26,6 +26,22 @@ COPY apps/api .
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Run as a non-root user.
+#
+# The container previously ran as uid 0, which matters in two concrete ways: under
+# docker-compose it bind-mounts ../data and so created root-owned files in the
+# developer's working tree, and in Kubernetes it cannot satisfy
+# securityContext.runAsNonRoot (the pod fails to start with CreateContainerConfigError).
+#
+# uid 10001 is arbitrary but fixed, so a persistent volume written by one version stays
+# writable by the next. /app/data must be owned by it because SQLite and Chroma both
+# write there; a Kubernetes PVC is chowned via fsGroup instead (see the StatefulSet).
+RUN groupadd --system --gid 10001 appuser \
+    && useradd --system --uid 10001 --gid appuser --no-create-home appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Expose port
 EXPOSE 8000
 

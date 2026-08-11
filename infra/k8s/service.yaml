@@ -1,0 +1,33 @@
+# Headless service for the StatefulSet's stable DNS name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: codebaseqa-api
+  labels:
+    app: codebaseqa-api
+spec:
+  clusterIP: None
+  selector:
+    app: codebaseqa-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+# NodePort so the API is reachable from the host without port-forward. The port is
+# mapped by kind-cluster.yaml's extraPortMappings.
+apiVersion: v1
+kind: Service
+metadata:
+  name: codebaseqa-api-nodeport
+  labels:
+    app: codebaseqa-api
+spec:
+  type: NodePort
+  selector:
+    app: codebaseqa-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      nodePort: 30080
