@@ -4,6 +4,7 @@ Designed for future extensibility (multi-user, teams, etc.)
 """
 
 import enum
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -21,6 +22,8 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import declarative_base, relationship
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -410,6 +413,45 @@ class GraphNodeInteraction(Base):
         Index("ix_graph_node_interactions_repo", "repository_id"),
         Index("ix_graph_node_interactions_repo_node", "repository_id", "node_id", unique=True),
     )
+
+
+def reap_stuck_indexing(engine) -> int:
+    """
+    Fail repositories left mid-index by a process that died.
+
+    Only FAILED and COMPLETED are terminal. A container killed during CLONING, PARSING or
+    EMBEDDING left the row in that state forever, and the only self-healing path in
+    repos.py and seed_demo.py triggers on FAILED -- so a stuck repository could never be
+    retried through the API, and in demo mode that bricked the deployment.
+
+    Runs at startup, where anything still in a transient state provably has no live
+    indexer, because the process that owned it is gone.
+    """
+    from sqlalchemy import text as _text
+
+    transient = ("cloning", "parsing", "embedding")
+    with engine.begin() as connection:
+        placeholders = ", ".join(f":s{i}" for i in range(len(transient)))
+        params = {f"s{i}": value for i, value in enumerate(transient)}
+        # SQLEnum persists the member NAME, so compare case-insensitively to be safe
+        # across both spellings.
+        result = connection.execute(
+            _text(
+                "UPDATE repositories SET status = 'FAILED', "
+                "indexing_error = COALESCE(indexing_error, "
+                "'Indexing was interrupted before completing. Re-import to retry.') "
+                f"WHERE LOWER(status) IN ({placeholders})"
+            ),
+            params,
+        )
+        reaped = result.rowcount or 0
+
+    if reaped:
+        logger.warning(
+            "Marked %d repository(ies) as failed: they were mid-index when the previous "
+            "process exited. They can now be re-indexed.", reaped
+        )
+    return reaped
 
 
 def init_db(engine):

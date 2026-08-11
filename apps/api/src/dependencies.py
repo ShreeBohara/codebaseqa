@@ -159,3 +159,10 @@ def get_graph_store():
     from src.core.graph.neo4j_store import Neo4jGraphStore
 
     return Neo4jGraphStore(driver, database=settings.neo4j_database)
+
+
+def get_progress_store():
+    """Shared indexing-progress store (Redis stream, memory fallback)."""
+    from src.core.progress import ProgressStore
+
+    return ProgressStore(redis_client=get_redis_client())

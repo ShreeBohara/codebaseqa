@@ -82,7 +82,7 @@ class IndexingService:
             # Update status to cloning
             repo.status = IndexingStatus.CLONING
             self._db.commit()
-            self._update_progress(repo_id, "cloning", "Cloning repository...", 0)
+            await self._publish_progress(repo_id, "cloning", "Cloning repository...", 0)
 
             # Clone repository
             local_path = await self._repo_manager.clone_repository(
@@ -98,7 +98,7 @@ class IndexingService:
             # Update status to parsing
             repo.status = IndexingStatus.PARSING
             self._db.commit()
-            self._update_progress(repo_id, "parsing", "Parsing code files...", 20)
+            await self._publish_progress(repo_id, "parsing", "Parsing code files...", 20)
 
             # Find and parse files
             files = self._find_files(local_path)
@@ -108,7 +108,7 @@ class IndexingService:
             chunks_data = []
             for i, file_path in enumerate(files):
                 progress_pct = 20 + (60 * (i / max(total_files, 1)))
-                self._update_progress(repo_id, "parsing", f"Parsing {file_path.name}...", progress_pct)
+                await self._publish_progress(repo_id, "parsing", f"Parsing {file_path.name}...", progress_pct, i, total_files)
 
                 try:
                     file_chunks = await self._parse_file(repo, file_path, local_path)
@@ -123,7 +123,7 @@ class IndexingService:
             # Update status to embedding
             repo.status = IndexingStatus.EMBEDDING
             self._db.commit()
-            self._update_progress(repo_id, "embedding", "Generating embeddings...", 80)
+            await self._publish_progress(repo_id, "embedding", "Generating embeddings...", 80)
 
             # Generate embeddings and store
             if chunks_data:
@@ -153,7 +153,7 @@ class IndexingService:
             repo.status = IndexingStatus.COMPLETED
             repo.last_indexed_at = datetime.now(timezone.utc)
             self._db.commit()
-            self._update_progress(repo_id, "completed", "Indexing complete!", 100)
+            await self._publish_progress(repo_id, "completed", "Indexing complete!", 100, total_files, total_files)
 
             logger.info(f"Successfully indexed {repo.github_owner}/{repo.github_name}")
 
@@ -162,7 +162,7 @@ class IndexingService:
             repo.status = IndexingStatus.FAILED
             repo.indexing_error = str(e)
             self._db.commit()
-            self._update_progress(repo_id, "failed", str(e), 0)
+            await self._publish_progress(repo_id, "failed", str(e), 0)
 
     async def _reset_repository_index_data(self, repo_id: str) -> None:
         """Clear prior SQL/vector artifacts for a repository before full re-index."""
@@ -685,6 +685,27 @@ class IndexingService:
             metadatas=[c["metadata"] for c in chunks_data],
         )
 
+    async def _publish_progress(
+        self, repo_id: str, status: str, step: str, percent: float,
+        files_processed: int = 0, total_files: int = 0,
+    ) -> None:
+        """
+        Record progress where a *different* process can read it.
+
+        _update_progress below writes an instance dict, which the SSE endpoint can never
+        see because it builds its own IndexingService. This is the write that actually
+        reaches a client.
+        """
+        self._update_progress(repo_id, status, step, percent)
+        try:
+            from src.dependencies import get_progress_store
+
+            await get_progress_store().publish(
+                repo_id, status, step, percent, files_processed, total_files
+            )
+        except Exception as exc:
+            logger.debug("Progress publish failed for %s: %s", repo_id, exc)
+
     def _update_progress(self, repo_id: str, status: str, step: str, percent: float):
         """Update progress tracking."""
         self._progress[repo_id] = {
@@ -694,7 +715,29 @@ class IndexingService:
         }
 
     async def get_progress(self, repo_id: str) -> Dict[str, Any]:
-        """Get current progress for a repository."""
+        """
+        Current progress for a repository.
+
+        Order matters: the shared store first, because it is the only source a *different*
+        process (the SSE request handler) can observe. The instance dict and the database
+        fallback follow for the single-process case and for repos with no live indexer.
+        """
+        try:
+            from src.dependencies import get_progress_store
+
+            event = await get_progress_store().latest(repo_id)
+            if event:
+                return {
+                    "repo_id": repo_id,
+                    "status": event.get("status", "unknown"),
+                    "current_step": event.get("current_step", ""),
+                    "progress_percent": event.get("progress_percent", 0),
+                    "files_processed": event.get("files_processed", 0),
+                    "total_files": event.get("total_files", 0),
+                }
+        except Exception as exc:
+            logger.debug("Progress store read failed for %s: %s", repo_id, exc)
+
         if repo_id in self._progress:
             return {
                 "repo_id": repo_id,
