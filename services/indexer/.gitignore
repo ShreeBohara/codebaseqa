@@ -1,0 +1,2 @@
+# Built binary; rebuild with `CGO_ENABLED=1 go build -o bin/indexer .`
+bin/
