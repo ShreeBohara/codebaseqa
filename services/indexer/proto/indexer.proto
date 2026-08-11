@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package codebaseqa.indexer.v1;
+
+option go_package = "github.com/ShreeBohara/codebaseqa/services/indexer/gen;gen";
+
+// Repository indexing: file walk plus tree-sitter parsing, extracted from the Python API.
+//
+// WHY A SEPARATE SERVICE, STATED HONESTLY
+// Not for parse throughput. Measured on this repository, ThreadPoolExecutor over the
+// Python parser gives 1.02x (py-tree-sitter never releases the GIL) and
+// ProcessPoolExecutor gives 2.84x, while only ~41% of the parse phase is actually C -- so
+// a perfect native rewrite ceilings around 2.4x, below what a half-day change to the
+// existing Python already achieves.
+//
+// The real reason is a process and failure boundary. repos.py runs indexing by spinning a
+// new event loop inside an anyio threadpool thread and blocking it for minutes, in the
+// same process that serves chat. This moves that CPU-bound, GIL-bound, minutes-long stage
+// behind an explicit contract.
+//
+// Server streaming is the point of using gRPC here rather than one big response: progress
+// becomes part of the contract instead of shared mutable state, which is the same bug
+// class that made the SSE progress bar show only 0% or 100%.
+service Indexer {
+  // Walk and parse a checkout, streaming progress and chunk batches as they are produced.
+  rpc IndexRepo(IndexRequest) returns (stream IndexEvent);
+
+  // Cheap liveness probe. Returns the grammars this build actually links, which is not
+  // guaranteed to match the Python side -- see ParserInfo.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message IndexRequest {
+  string repo_id = 1;
+  // Absolute path to an existing checkout. The service does NOT clone: the API already
+  // owns credentials and the clone lives on a volume attached to one machine, so cloning
+  // here would duplicate auth handling and force the two to share a filesystem for a
+  // reason other than reading it.
+  string root_path = 2;
+  // 0 means "use the server default" so the API can defer rather than restate policy.
+  uint32 max_files = 3;
+  uint32 max_file_size_kb = 4;
+  // Emit a batch once this many chunks accumulate. 0 means the server default.
+  uint32 batch_size = 5;
+}
+
+message IndexEvent {
+  oneof event {
+    Progress progress = 1;
+    ChunkBatch chunks = 2;
+    Completed completed = 3;
+    Failed failed = 4;
+  }
+}
+
+message Progress {
+  string stage = 1;             // walking | parsing
+  string current_path = 2;
+  uint32 files_processed = 3;
+  uint32 total_files = 4;
+  double percent = 5;
+}
+
+// Batched rather than one chunk per message: a per-chunk stream on a large repository
+// spends more time in framing than in parsing.
+message ChunkBatch {
+  repeated Chunk chunks = 1;
+}
+
+message Chunk {
+  string file_path = 1;         // repo-relative, matching CodeFile.path on the Python side
+  string language = 2;
+  string chunk_type = 3;        // function | class | method | module
+  string name = 4;
+  string content = 5;
+  uint32 start_line = 6;
+  uint32 end_line = 7;
+  // True when tree-sitter produced an ERROR node for this file. The Python indexer
+  // treats a parse error as a signal to fall back to raw indexing; without this flag
+  // that decision cannot cross the boundary, since tree-sitter does not raise -- it
+  // returns a tree containing errors.
+  bool had_parse_error = 8;
+}
+
+message Completed {
+  uint32 files_walked = 1;
+  uint32 files_parsed = 2;
+  uint32 files_skipped = 3;
+  uint32 chunks_emitted = 4;
+  uint32 files_with_errors = 5;
+  int64 duration_ms = 6;
+}
+
+message Failed {
+  string message = 1;
+  string path = 2;              // set when a single file caused it
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ok = 1;
+  string version = 2;
+  repeated ParserInfo parsers = 3;
+}
+
+message ParserInfo {
+  string language = 1;
+  repeated string extensions = 2;
+}
