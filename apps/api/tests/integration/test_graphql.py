@@ -100,8 +100,12 @@ def test_graphql_is_mounted_alongside_rest(gql_env):
 
     # And REST still answers, on the same app.
     assert client.get(f"/api/learning/{repo_id}/stats").status_code == 200
-    paths = {getattr(r, "path", "") for r in app.routes}
-    assert any(p.startswith("/api/chat") for p in paths), "chat must remain on REST/SSE"
+
+    # Chat is still routed. A 404 would mean the router is gone; an empty body should be
+    # rejected by validation instead, which proves the route exists without needing a
+    # provider or a real session.
+    chat = client.post("/api/chat/sessions", json={})
+    assert chat.status_code != 404, "chat must remain on REST/SSE"
 
 
 def test_repo_query(gql_env):
