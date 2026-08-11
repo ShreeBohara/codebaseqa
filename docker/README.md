@@ -65,6 +65,17 @@ NEO4J_PASSWORD=<something>
 
 Re-index a repository to populate it, then browse at http://localhost:7474.
 
+The Cypher in this store is exercised against a real server by
+apps/api/tests/integration/test_neo4j_live.py, which skips unless you point it at one:
+
+```bash
+docker run -d -p 7688:7687 -e NEO4J_AUTH=neo4j/verifypassword neo4j:5-community
+NEO4J_TEST_URI=bolt://localhost:7688 NEO4J_TEST_PASSWORD=verifypassword pytest tests
+```
+
+Worth running after any change to neo4j_store.py: the fake-driver unit tests cannot catch
+Cypher the server rejects, which is how a broken delete query once shipped green.
+
 To confirm the projection matches SQL:
 
 ```cypher
