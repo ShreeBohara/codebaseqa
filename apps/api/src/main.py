@@ -21,7 +21,7 @@ from src.dependencies import (
     get_session_factory,
     get_vector_store,
 )
-from src.models.database import init_db
+from src.models.database import init_db, reap_stuck_indexing
 from src.models.migrations import run_pending_migrations
 
 # Configure logging
@@ -53,6 +53,8 @@ async def lifespan(app: FastAPI):
     engine = get_db_engine()
     init_db(engine)
     run_pending_migrations(engine)
+    # Anything still mid-index belongs to a process that no longer exists.
+    reap_stuck_indexing(engine)
     logger.info("Database initialized")
 
     # Initialize vector store

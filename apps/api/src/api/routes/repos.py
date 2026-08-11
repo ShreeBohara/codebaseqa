@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,9 @@ from src.services.indexing_service import IndexingService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Ceiling on a single SSE progress subscription; clients reconnect if they still care.
+_PROGRESS_STREAM_TIMEOUT_SECONDS = 15 * 60
 
 
 def run_indexing_task(repo_id: str):
@@ -151,6 +154,7 @@ async def get_repository(
 @router.get("/{repo_id}/progress")
 async def get_indexing_progress(
     repo_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Stream indexing progress updates via SSE."""
@@ -162,14 +166,37 @@ async def get_indexing_progress(
         raise HTTPException(status_code=404, detail="Repository not found")
 
     async def progress_stream():
-        """Generate SSE events for progress updates."""
+        """
+        SSE progress events.
+
+        Bounded and disconnect-aware: the previous version looped forever with no client
+        check and no ceiling, so a repository stuck mid-index held an open response (and
+        its database session) indefinitely, once per browser tab.
+        """
         indexing_service = IndexingService(db)
+        deadline = asyncio.get_event_loop().time() + _PROGRESS_STREAM_TIMEOUT_SECONDS
+        last_payload = None
 
         while True:
-            progress = await indexing_service.get_progress(repo_id)
-            yield f"data: {json.dumps(progress)}\n\n"
+            if await request.is_disconnected():
+                break
 
-            if progress["status"] in ["completed", "failed"]:
+            progress = await indexing_service.get_progress(repo_id)
+
+            # Only emit on change; a 1s poll of an unchanged value is pure noise.
+            payload = json.dumps(progress, sort_keys=True)
+            if payload != last_payload:
+                last_payload = payload
+                yield f"data: {payload}\n\n"
+
+            if progress.get("status") in ("completed", "failed"):
+                break
+
+            if asyncio.get_event_loop().time() > deadline:
+                yield (
+                    'data: {"type": "timeout", "message": '
+                    '"Progress stream timed out; reconnect to continue watching."}\n\n'
+                )
                 break
 
             await asyncio.sleep(1)
