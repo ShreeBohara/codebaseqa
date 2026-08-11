@@ -84,3 +84,12 @@ htmlcov/
 .cache/
 Documents/
 /repos/
+
+# -----------------------
+# macOS / iCloud duplicate artifacts
+# -----------------------
+# iCloud Drive appends " 2"/" 3" to filenames it duplicates. These are never real
+# source files, and a duplicated test_*.py would be collected by pytest as a second copy
+# of the same tests.
+* 2.*
+* 3.*

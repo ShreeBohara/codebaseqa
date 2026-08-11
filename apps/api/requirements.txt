@@ -46,6 +46,10 @@ tree-sitter-ruby>=0.21.0
 # HTTP Client
 httpx>=0.27.0
 
+# GraphQL surface, mounted alongside REST. Upper bound is deliberate: this is a
+# weekly-releasing 0.x with a documented breaking-change history.
+strawberry-graphql[fastapi]>=0.240,<1.0
+
 # Graph read model (optional; only imported when NEO4J_ENABLED=true)
 neo4j>=5.28
 

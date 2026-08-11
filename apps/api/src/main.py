@@ -119,6 +119,14 @@ app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(learning.router, prefix="/api/learning", tags=["learning"])
 app.include_router(platform.router, prefix="/api/platform", tags=["platform"])
 
+# GraphQL, additive rather than a migration: every REST route above still works.
+# Chat deliberately stays REST/SSE -- see src/api/graphql/schema.py.
+from strawberry.fastapi import GraphQLRouter  # noqa: E402
+
+from src.api.graphql.schema import schema as graphql_schema  # noqa: E402
+
+app.include_router(GraphQLRouter(graphql_schema), prefix="/graphql", tags=["graphql"])
+
 
 # Health check endpoint
 @app.get("/health")
