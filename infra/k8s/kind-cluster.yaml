@@ -1,0 +1,15 @@
+# kind cluster for local validation. kind is a Kubernetes SIG project and costs nothing,
+# which is the honest choice here: AKS's cheapest sane node (Standard_B2s) is ~$30/month
+# to run a workload that is pinned to a single replica.
+#
+# extraPortMappings exposes the NodePort on the host so the API is reachable at
+# http://localhost:30080 without kubectl port-forward.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: codebaseqa
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP

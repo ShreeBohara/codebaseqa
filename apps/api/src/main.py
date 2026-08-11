@@ -57,10 +57,27 @@ async def lifespan(app: FastAPI):
     reap_stuck_indexing(engine)
     logger.info("Database initialized")
 
-    # Initialize vector store
-    vector_store = get_vector_store()
-    await vector_store.initialize()
-    logger.info("Vector store initialized")
+    # Initialize the vector store.
+    #
+    # Non-fatal, because building it constructs the embedding client eagerly, and the
+    # provider SDKs raise on a missing key at construction time rather than on first use.
+    # Letting that propagate meant the process exited during startup whenever a key was
+    # absent, with three consequences that only became obvious once this ran in
+    # Kubernetes: the pod CrashLoopBackOffs instead of reporting itself unhealthy, you
+    # cannot deploy first and supply credentials afterwards, and /api/health can never
+    # report "llm_provider unreachable" because the app never boots far enough to serve
+    # it. Endpoints that genuinely need embeddings still fail per-request with a clear
+    # error; the ones that do not (platform config, repo listing, progress) keep working.
+    vector_store = None
+    try:
+        vector_store = get_vector_store()
+        await vector_store.initialize()
+        logger.info("Vector store initialized")
+    except Exception as exc:
+        logger.error(
+            "Vector store unavailable at startup; search, chat and indexing will fail "
+            "until this is resolved (check the embedding provider credentials): %s", exc
+        )
 
     # Optional Neo4j read model. Non-fatal by design: the graph endpoint falls back to
     # the SQL path, so an unreachable graph database must not stop the API booting.
@@ -79,7 +96,14 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down CodebaseQA API...")
-    await vector_store.close()
+    # May be None when startup could not build it; closing unconditionally would raise
+    # AttributeError during shutdown and mask the real startup error.
+    if vector_store is not None:
+        try:
+            await vector_store.close()
+        except Exception as exc:
+            logger.warning("Vector store close failed: %s", exc)
+
     graph_driver = get_graph_driver()
     if graph_driver is not None:
         try:

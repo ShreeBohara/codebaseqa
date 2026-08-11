@@ -24,6 +24,35 @@ def _table_exists(engine: Engine, table_name: str) -> bool:
     return inspector.has_table(table_name)
 
 
+def _add_column(connection, table: str, column: str, ddl: str, applied: List[str]) -> None:
+    """
+    Add a column idempotently, tolerating a concurrent process adding it first.
+
+    SQLite has no ADD COLUMN IF NOT EXISTS, so the only option is check-then-act -- which
+    is a race: two replicas starting together both see the column missing and both issue
+    the ALTER, and the loser fails with "duplicate column name". That took down the second
+    replica's startup entirely.
+
+    Rather than serialize startup with a lock (a lock file is unreliable on a shared
+    volume, and a DB-level mutex needs its own release path), the operation is made
+    genuinely idempotent: a duplicate-column error means someone else applied it, which is
+    success. Every other error still propagates.
+    """
+    from sqlalchemy.exc import OperationalError, ProgrammingError
+
+    try:
+        connection.execute(text(ddl))
+        applied.append(f"{table}.{column}")
+    except (OperationalError, ProgrammingError) as exc:
+        message = str(exc).lower()
+        if "duplicate column" in message or "already exists" in message:
+            logger.debug(
+                "Column %s.%s already added by another process; continuing", table, column
+            )
+            return
+        raise
+
+
 def run_pending_migrations(engine: Engine) -> List[str]:
     """
     Apply additive migrations required for backward-compatible schema hardening.
@@ -32,9 +61,10 @@ def run_pending_migrations(engine: Engine) -> List[str]:
     applied: List[str] = []
 
     with engine.begin() as connection:
-        if not _column_exists(engine, "chat_messages", "retrieval_meta"):
-            connection.execute(text("ALTER TABLE chat_messages ADD COLUMN retrieval_meta JSON"))
-            applied.append("chat_messages.retrieval_meta")
+        _add_column(
+            connection, "chat_messages", "retrieval_meta",
+            "ALTER TABLE chat_messages ADD COLUMN retrieval_meta JSON", applied,
+        )
 
         connection.execute(
             text(
@@ -98,17 +128,20 @@ def run_pending_migrations(engine: Engine) -> List[str]:
         )
         applied.append("ix_learning_lessons_expiry")
 
-        if not _column_exists(engine, "lesson_progress", "persona"):
-            connection.execute(text("ALTER TABLE lesson_progress ADD COLUMN persona VARCHAR(50)"))
-            applied.append("lesson_progress.persona")
+        _add_column(
+            connection, "lesson_progress", "persona",
+            "ALTER TABLE lesson_progress ADD COLUMN persona VARCHAR(50)", applied,
+        )
 
-        if not _column_exists(engine, "lesson_progress", "module_id"):
-            connection.execute(text("ALTER TABLE lesson_progress ADD COLUMN module_id VARCHAR(100)"))
-            applied.append("lesson_progress.module_id")
+        _add_column(
+            connection, "lesson_progress", "module_id",
+            "ALTER TABLE lesson_progress ADD COLUMN module_id VARCHAR(100)", applied,
+        )
 
-        if not _column_exists(engine, "learning_syllabi", "expires_at"):
-            connection.execute(text("ALTER TABLE learning_syllabi ADD COLUMN expires_at DATETIME"))
-            applied.append("learning_syllabi.expires_at")
+        _add_column(
+            connection, "learning_syllabi", "expires_at",
+            "ALTER TABLE learning_syllabi ADD COLUMN expires_at DATETIME", applied,
+        )
 
         # code_dependencies itself is created by init_db/create_all, which runs first
         # (main.py). These indexes are declared on the model too, so this block only

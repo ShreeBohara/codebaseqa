@@ -1,0 +1,111 @@
+# StatefulSet, not Deployment, and replicas: 1 -- both deliberate. See the comments.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: codebaseqa-api
+  labels:
+    app: codebaseqa-api
+spec:
+  serviceName: codebaseqa-api
+  # ---------------------------------------------------------------------------------
+  # WHY replicas: 1, AND WHY THAT IS NOT A TODO
+  #
+  # This application cannot currently run a second replica, for two reasons that are
+  # properties of the code and not of this manifest:
+  #
+  #   1. SQLite. DATABASE_URL is a file on the volume. A ReadWriteOnce PVC attaches to
+  #      one node, and concurrent writers to one SQLite file across processes is exactly
+  #      the configuration sqlite.org/howtocorrupt.html warns about.
+  #   2. ChromaDB is embedded. chroma_store.py holds a process-local persistent client
+  #      over the same directory, so two pods would be two independent writers to one
+  #      on-disk index.
+  #
+  # Startup itself is now safe to run concurrently -- the ALTER TABLE migrations were
+  # made idempotent rather than check-then-act, so a second replica no longer dies on
+  # "duplicate column name". But safe startup is not the same as safe operation.
+  #
+  # Scaling this past 1 means moving Postgres-ward and to a server-mode vector store.
+  # Until then, this number is a correct description of the system.
+  # ---------------------------------------------------------------------------------
+  replicas: 1
+  selector:
+    matchLabels:
+      app: codebaseqa-api
+  template:
+    metadata:
+      labels:
+        app: codebaseqa-api
+    spec:
+      securityContext:
+        # The image creates uid 10001 and sets USER; runAsNonRoot makes the kubelet
+        # refuse to start the pod if that ever regresses to root.
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        # fsGroup is what makes the mounted PVC writable by the non-root user: the
+        # kubelet chowns the volume to this GID on mount. Without it the pod starts and
+        # then fails on the first SQLite write, which is a much worse failure than not
+        # starting.
+        fsGroup: 10001
+      containers:
+        - name: api
+          image: codebaseqa-api:kind
+          # Never for a locally built tag: with IfNotPresent/Always, kind would try the
+          # registry and fail on an image that only exists in the node's containerd.
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: codebaseqa-config
+            - secretRef:
+                name: codebaseqa-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          # /api/health is intentionally NOT the readiness probe.
+          #
+          # It reports "degraded" whenever any dependency is unreachable -- including the
+          # LLM provider, which is a third party. Gating readiness on it would take the
+          # pod out of service because OpenAI had a bad minute, and in this cluster
+          # (no key configured) it would never become ready at all.
+          #
+          # Readiness asks the narrower question the kubelet actually needs: is this
+          # process serving HTTP? /api/platform/config touches only the local database.
+          readinessProbe:
+            httpGet:
+              path: /api/platform/config
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/platform/config
+              port: http
+            # Generous: startup runs migrations, the stuck-index reaper and Chroma
+            # initialization. Restarting mid-migration is worse than waiting.
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            # Chroma plus the tree-sitter grammars are the floor here; 256Mi OOM-kills
+            # during indexing.
+            requests:
+              cpu: "100m"
+              memory: "512Mi"
+            limits:
+              memory: "2Gi"
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        # ReadWriteOnce is the honest access mode: it matches the single-writer
+        # constraint above rather than implying this could be shared.
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
