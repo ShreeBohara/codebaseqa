@@ -61,6 +61,32 @@ CGO_ENABLED=1 go build -o bin/indexer .
 `CGO_ENABLED=1` is mandatory: every grammar is cgo. That means a C toolchain in any builder
 image, no `scratch` base, and a slower uncached build than the all-wheels Python image.
 
+## Regenerating the stubs
+
+Both sides are generated from `proto/indexer.proto` and both are committed. CI regenerates
+them and fails if they differ, so an edit to the proto that updates only one language
+cannot merge.
+
+```bash
+# Go
+cd services/indexer
+protoc --proto_path=proto --go_out=gen --go_opt=paths=source_relative \
+       --go-grpc_out=gen --go-grpc_opt=paths=source_relative proto/indexer.proto
+
+# Python
+cd apps/api
+python -m grpc_tools.protoc --proto_path=../../services/indexer/proto \
+  --python_out=src/core/indexer --grpc_python_out=src/core/indexer \
+  ../../services/indexer/proto/indexer.proto
+sed -i 's/^import indexer_pb2 as indexer__pb2$/from src.core.indexer import indexer_pb2 as indexer__pb2/' \
+  src/core/indexer/indexer_pb2_grpc.py
+```
+
+Generator versions are **pinned in CI** (protoc 29.3, protoc-gen-go v1.36.12,
+protoc-gen-go-grpc v1.6.2, grpcio-tools 1.83.0) because generated files embed the
+generator version — an unpinned plugin would change the output and fail the drift check
+for a reason unrelated to the contract. Bump the pins and the committed stubs together.
+
 ## Grammar scope, stated rather than implied
 
 This build links **5** grammars (python, javascript, typescript, tsx, go) against the
@@ -109,5 +135,6 @@ The service is **not wired into the indexing pipeline** — `IndexingService` st
 Python parser, and `IndexerClient` is opt-in. Doing that swap needs a decision this PR does
 not make: the service must be co-located with the API on the shared volume, because clones
 live under `./data/repos/<owner>/<name>` and a Fly/EBS-style volume attaches to exactly one
-machine. There is also no CI job for Go yet (`ci.yml` has Python 3.11 and Node 20 only, no
-cgo toolchain, no grammar-compile caching, no cross-language contract test).
+machine. CI now covers this service: `indexer-go` runs gofmt, `go vet`, `go test -race` and a cgo
+build, and `proto-codegen-drift` regenerates both languages' stubs and fails if they differ
+from what is committed.

@@ -30,7 +30,7 @@ var indexedExts = map[string]struct{}{
 	".cs": {}, ".csx": {},
 	".rb": {}, ".rake": {}, ".gemspec": {}, ".php": {}, ".swift": {}, ".kt": {},
 	".erb": {},
-	".md": {}, ".json": {},
+	".md":  {}, ".json": {},
 }
 
 // Mirrors INDEXED_FILENAMES: extensionless files worth indexing.
