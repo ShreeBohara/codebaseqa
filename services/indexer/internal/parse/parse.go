@@ -97,9 +97,9 @@ var configs = map[string]langConfig{
 var extToLang = map[string]string{
 	".py": "python",
 	".js": "javascript", ".jsx": "javascript",
-	".ts": "typescript",
+	".ts":  "typescript",
 	".tsx": "tsx", // never "typescript"
-	".go": "go",
+	".go":  "go",
 }
 
 // LanguageFor reports the grammar for an extension, and whether one exists.

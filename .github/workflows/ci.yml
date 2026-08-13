@@ -86,3 +86,110 @@ jobs:
 
     - name: Run Tests
       run: pnpm --filter web test
+
+  indexer-go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./services/indexer
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache-dependency-path: services/indexer/go.sum
+
+    # Every tree-sitter grammar is a cgo package with its own generated parser.c, so this
+    # job cannot use CGO_ENABLED=0 and needs a C toolchain. ubuntu-latest ships gcc, but
+    # pinning the expectation here makes the failure obvious if that ever changes.
+    - name: Verify C toolchain is present (grammars are cgo)
+      run: cc --version
+
+    - name: Formatting
+      run: |
+        # gen/ is protoc output and is checked by the codegen-drift step instead.
+        unformatted=$(gofmt -l . | grep -v '^gen/' || true)
+        if [ -n "$unformatted" ]; then
+          echo "::error::gofmt needed for: $unformatted"
+          gofmt -d $unformatted
+          exit 1
+        fi
+
+    - name: Vet
+      run: CGO_ENABLED=1 go vet ./...
+
+    - name: Test
+      run: CGO_ENABLED=1 go test -race ./...
+
+    - name: Build
+      run: CGO_ENABLED=1 go build -o /tmp/indexer .
+
+  # The contract is shared between two languages that generate stubs independently. Without
+  # this, editing indexer.proto and regenerating only one side produces a mismatch that
+  # nothing catches until runtime -- the Go server and Python client would simply disagree.
+  proto-codegen-drift:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache-dependency-path: services/indexer/go.sum
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install protoc and plugins
+      run: |
+        PROTOC_VERSION=29.3
+        curl -fsSL -o /tmp/protoc.zip \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+        unzip -q /tmp/protoc.zip -d /tmp/protoc
+        echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
+        # Pinned, not @latest. Generated files embed the generator version
+        # ("protoc-gen-go v1.36.12", "Protobuf Python Version: 7.35.1"), so an unpinned
+        # plugin would eventually change the output and fail this check for a reason that
+        # has nothing to do with the proto. These are the exact versions that produced the
+        # committed stubs; bump them and the stubs together.
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        python -m pip install --quiet "grpcio-tools==1.83.0"
+
+    - name: Regenerate Go stubs
+      working-directory: ./services/indexer
+      run: |
+        protoc --proto_path=proto --go_out=gen --go_opt=paths=source_relative \
+               --go-grpc_out=gen --go-grpc_opt=paths=source_relative proto/indexer.proto
+
+    - name: Regenerate Python stubs
+      working-directory: ./apps/api
+      run: |
+        python -m grpc_tools.protoc \
+          --proto_path=../../services/indexer/proto \
+          --python_out=src/core/indexer --grpc_python_out=src/core/indexer \
+          ../../services/indexer/proto/indexer.proto
+        # The generated grpc stub uses a flat import; the committed copy is package-relative.
+        sed -i 's/^import indexer_pb2 as indexer__pb2$/from src.core.indexer import indexer_pb2 as indexer__pb2/' \
+          src/core/indexer/indexer_pb2_grpc.py
+
+    - name: Fail if committed stubs differ from the proto
+      run: |
+        # A strict whole-file diff is safe because protoc, both Go plugins and grpcio-tools
+        # are all pinned above; the round-trip was verified byte-identical.
+        if ! git diff --quiet -- services/indexer/gen apps/api/src/core/indexer; then
+          echo "::error::Generated stubs are out of date with proto/indexer.proto."
+          echo "Regenerate both sides and commit; see services/indexer/README.md."
+          git diff --stat -- services/indexer/gen apps/api/src/core/indexer
+          git diff -- services/indexer/gen apps/api/src/core/indexer | head -60
+          exit 1
+        fi
+        echo "Generated stubs match the proto on both sides."
