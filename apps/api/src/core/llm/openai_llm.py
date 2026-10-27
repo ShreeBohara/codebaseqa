@@ -149,7 +149,7 @@ class OpenAILLM(BaseLLM):
         deployment as down.
         """
         try:
-            await self._client.models.list()
+            await self._client.with_options(timeout=2.0, max_retries=0).models.list()
             return True
         except NotFoundError:
             logger.info(

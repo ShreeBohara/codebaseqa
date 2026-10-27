@@ -168,6 +168,7 @@ async def test_health_check_treats_missing_models_endpoint_as_reachable(monkeypa
     async def raise_404():
         raise NotFoundError("no models route", response=_response(404), body=None)
 
+    monkeypatch.setattr(llm._client, "with_options", lambda **kwargs: llm._client)
     monkeypatch.setattr(llm._client.models, "list", raise_404)
     assert await llm.health_check() is True
 
@@ -179,6 +180,7 @@ async def test_health_check_fails_on_bad_credentials(monkeypatch):
     async def raise_401():
         raise AuthenticationError("bad key", response=_response(401), body=None)
 
+    monkeypatch.setattr(llm._client, "with_options", lambda **kwargs: llm._client)
     monkeypatch.setattr(llm._client.models, "list", raise_401)
     assert await llm.health_check() is False
 
@@ -190,6 +192,7 @@ async def test_health_check_fails_on_unexpected_status(monkeypatch):
     async def raise_500():
         raise APIStatusError("boom", response=_response(500), body=None)
 
+    monkeypatch.setattr(llm._client, "with_options", lambda **kwargs: llm._client)
     monkeypatch.setattr(llm._client.models, "list", raise_500)
     assert await llm.health_check() is False
 
@@ -201,6 +204,7 @@ async def test_health_check_fails_when_unreachable(monkeypatch):
     async def raise_conn():
         raise ConnectionError("dns failure")
 
+    monkeypatch.setattr(llm._client, "with_options", lambda **kwargs: llm._client)
     monkeypatch.setattr(llm._client.models, "list", raise_conn)
     assert await llm.health_check() is False
 
@@ -212,6 +216,7 @@ async def test_health_check_passes_when_models_list_works(monkeypatch):
     async def ok():
         return object()
 
+    monkeypatch.setattr(llm._client, "with_options", lambda **kwargs: llm._client)
     monkeypatch.setattr(llm._client.models, "list", ok)
     assert await llm.health_check() is True
 

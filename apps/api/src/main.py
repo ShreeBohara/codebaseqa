@@ -2,6 +2,7 @@
 FastAPI application entry point.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -92,7 +93,11 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("Neo4j initialization failed, using SQL fallback: %s", exc)
 
-    yield
+    app.state.ready = True
+    try:
+        yield
+    finally:
+        app.state.ready = False
 
     # Shutdown
     logger.info("Shutting down CodebaseQA API...")
@@ -129,6 +134,8 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+app.state.ready = False
+
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
@@ -154,10 +161,27 @@ from src.api.graphql.schema import schema as graphql_schema  # noqa: E402
 app.include_router(GraphQLRouter(graphql_schema), prefix="/graphql", tags=["graphql"])
 
 
-# Health check endpoint
+# Readiness must never depend on third-party availability or SDK retry policy.
 @app.get("/health")
 async def health_check():
-    """Comprehensive health check endpoint."""
+    """Fast process readiness after startup; safe for Render/Kubernetes probes."""
+    ready = app.state.ready
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "healthy" if ready else "starting", "version": app.version},
+    )
+
+
+DEPENDENCY_CHECK_TIMEOUT_SECONDS = 2.0
+
+
+@app.get("/health/details")
+async def detailed_health_check():
+    """Dependency diagnostics, not a restart/readiness probe.
+
+    Keeps the previous detailed response shape and HTTP 200 diagnostic semantics;
+    inspect `status`/`checks` for degradation. External calls have bounded deadlines.
+    """
     import httpx
 
     from src.config import settings
@@ -192,7 +216,9 @@ async def health_check():
     try:
         llm = get_llm_service()
         if hasattr(llm, 'health_check'):
-            is_healthy = await llm.health_check()
+            is_healthy = await asyncio.wait_for(
+                llm.health_check(), timeout=DEPENDENCY_CHECK_TIMEOUT_SECONDS
+            )
             # Must contain "error" so the critical_ok test below actually fails --
             # the previous "unavailable/unreachable" wording passed that check, so an
             # unreachable LLM was reported as healthy.
@@ -202,13 +228,13 @@ async def health_check():
 
     # Check GitHub API rate limit
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=DEPENDENCY_CHECK_TIMEOUT_SECONDS) as client:
             headers = {}
             if settings.github_token:
                 headers["Authorization"] = f"token {settings.github_token}"
-            response = await client.get(
-                "https://api.github.com/rate_limit",
-                headers=headers
+            response = await asyncio.wait_for(
+                client.get("https://api.github.com/rate_limit", headers=headers),
+                timeout=DEPENDENCY_CHECK_TIMEOUT_SECONDS,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -244,7 +270,10 @@ async def health_check():
             if db is not None:
                 db.close()
 
-    critical_ok = all("error" not in str(v) for k, v in checks.items() if k != "demo_repo")
+    critical_ok = all(
+        str(value).startswith("ok")
+        for key, value in checks.items() if key != "demo_repo"
+    )
     demo_ready = True
     if settings.demo_mode:
         demo_ready = str(checks["demo_repo"]).startswith("completed")

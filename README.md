@@ -338,7 +338,8 @@ Notes:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/platform/config` | Runtime demo flags for frontend behavior |
-| `GET` | `/health` | Service health + dependency checks |
+| `GET` | `/health` | Fast local readiness (200 after startup, 503 otherwise); use for deployment probes |
+| `GET` | `/health/details` | Dependency diagnostics; HTTP 200 with `status: degraded` when a dependency fails |
 | `GET` | `/openapi.json` | OpenAPI JSON |
 | `GET` | `/openapi.yaml` | OpenAPI YAML |
 | `GET` | `/api/cache/stats` | LLM cache statistics |
@@ -495,3 +496,7 @@ Note on the benefit: GraphQL does **not** reduce database work here. Measured, t
 combined resolver issues slightly more SQL than the four REST handlers. What it removes
 is four network round trips, four dependency-injection cycles and four session
 open/close pairs.
+
+### Deployment health checks
+
+Keep Render and container probes pointed at `/health`. It performs no network or database calls, so upstream provider outages do not trigger restart loops. After startup completes it reports process readiness, not full search/chat availability. Use `/health/details` for on-demand database, vector-store, LLM, GitHub and demo diagnostics. The detailed response retains the former dependency fields and HTTP 200 semantics; consumers must inspect `status` and `checks`. Each external diagnostic has a two-second deadline; OpenAI diagnostics disable SDK retries without changing chat request retry behavior. Do not use the detailed endpoint as a deployment probe.
